@@ -32,14 +32,15 @@ jobs:
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
           IOS_PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
           IOS_APPSTORE_PROFILE_BASE64: ${{ secrets.IOS_APPSTORE_PROFILE_BASE64 }}
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID || secrets.APPLE_ASC_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID || secrets.APPLE_ASC_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 || secrets.APPLE_ASC_KEY_P8 }}
         run: |
           set -euo pipefail
           keys='IOS_CERTIFICATE_BASE64 IOS_CERTIFICATE_PASSWORD IOS_PROFILE_BASE64'
           if [[ "$MODE" == testflight ]]; then
-            keys='IOS_CERTIFICATE_BASE64 IOS_CERTIFICATE_PASSWORD IOS_APPSTORE_PROFILE_BASE64 APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_BASE64'
+            # A stored certificate is optional for TestFlight; the API key can create a temporary one.
+            keys='APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY'
           fi
           for key in $keys; do
             test -n "${!key}" || { echo "::error::Missing Actions secret: $key. See docs/ios-without-expo-account.md"; exit 1; }
@@ -47,7 +48,7 @@ jobs:
   build:
     needs: preflight
     runs-on: macos-26
-    timeout-minutes: 75
+    timeout-minutes: 110
     env:
       CI: '1'
       EXPO_NO_TELEMETRY: '1'
@@ -70,9 +71,9 @@ jobs:
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
           IOS_PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
           IOS_APPSTORE_PROFILE_BASE64: ${{ secrets.IOS_APPSTORE_PROFILE_BASE64 }}
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID || secrets.APPLE_ASC_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID || secrets.APPLE_ASC_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 || secrets.APPLE_ASC_KEY_P8 }}
         run: bash scripts/build-ios.sh "$BUILD_MODE"
       - name: Upload signed iPhone build
         if: success() && env.BUILD_MODE == 'adhoc'
@@ -90,16 +91,25 @@ jobs:
           name: ios-diagnostics-${{ github.run_number }}
           path: |
             build/*.log
-            build/ArchiveResult.xcresult
             package-lock.json
             ios/Podfile.lock
+          if-no-files-found: ignore
+          retention-days: 7
+      # The result bundle can contain the signing identity; this repo is public, so keep it to unsigned builds.
+      - name: Upload Xcode result bundle
+        continue-on-error: true
+        if: always() && env.BUILD_MODE == 'unsigned'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-xcresult-${{ github.run_number }}
+          path: build/ArchiveResult.xcresult
           if-no-files-found: ignore
           retention-days: 7
       - name: Report result accurately
         if: success()
         run: |
           if [[ "$BUILD_MODE" == testflight ]]; then
-            echo "Build ${{ github.run_number }} uploaded to App Store Connect. It shows up in TestFlight after Apple finishes processing (usually 5–30 minutes)." >> "$GITHUB_STEP_SUMMARY"
+            echo "Build ${{ github.run_number }} uploaded to App Store Connect for TestFlight. Details are in the build log." >> "$GITHUB_STEP_SUMMARY"
           elif [[ "$BUILD_MODE" == adhoc ]]; then
             echo 'Signed Ad Hoc IPA created; device installation still needs verification.' >> "$GITHUB_STEP_SUMMARY"
           else

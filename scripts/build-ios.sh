@@ -11,9 +11,12 @@ mkdir -p build
 
 required=()
 [[ "$mode" != adhoc ]] || required=(IOS_CERTIFICATE_BASE64 IOS_CERTIFICATE_PASSWORD IOS_PROFILE_BASE64)
-# TestFlight secrets are created by scripts/setup-testflight.mjs on the developer's own computer.
-[[ "$mode" != testflight ]] || required=(IOS_CERTIFICATE_BASE64 IOS_CERTIFICATE_PASSWORD IOS_APPSTORE_PROFILE_BASE64
-  APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_BASE64)
+# TestFlight needs only the App Store Connect API key. A stored certificate and profile
+# (from scripts/setup-testflight.mjs) are optional; without them a temporary pair is created.
+if [[ "$mode" == testflight ]]; then
+  required=(APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY)
+  [[ -z "${IOS_CERTIFICATE_BASE64:-}" ]] || required+=(IOS_CERTIFICATE_PASSWORD IOS_APPSTORE_PROFILE_BASE64)
+fi
 for key in ${required[@]+"${required[@]}"}; do
   [[ -n "${!key:-}" ]] || { echo "Missing GitHub Actions secret: $key"; exit 1; }
 done
@@ -61,21 +64,29 @@ else
   keychain="$signing_dir/signing.keychain-db"
   profile_path=''
   cleanup() {
+    # Revoke a temporary certificate if the build stopped before finishing.
+    [[ ! -f "$signing_dir/asc-state.json" ]] || node scripts/ci-signing.mjs cleanup "$signing_dir" || true
     security delete-keychain "$keychain" >/dev/null 2>&1 || true
     [[ -z "$profile_path" ]] || rm -f "$profile_path"
     rm -rf "$signing_dir"
   }
   trap cleanup EXIT
   export SIGNING_DIR="$signing_dir" SIGNING_MODE="$mode"
+  if [[ "$mode" == testflight ]]; then
+    node scripts/ci-signing.mjs key "$signing_dir"
+    if [[ -z "${IOS_CERTIFICATE_BASE64:-}" ]]; then
+      # Revoked by ci-signing.mjs after Apple finishes processing the upload.
+      node scripts/ci-signing.mjs create "$signing_dir"
+      IOS_CERTIFICATE_PASSWORD="$(cat "$signing_dir/p12-password")"
+    fi
+  fi
   python3 - <<'PY'
 import base64, os, pathlib
 root = pathlib.Path(os.environ['SIGNING_DIR'])
 profile = 'IOS_APPSTORE_PROFILE_BASE64' if os.environ['SIGNING_MODE'] == 'testflight' else 'IOS_PROFILE_BASE64'
-files = [('IOS_CERTIFICATE_BASE64','certificate.p12'),(profile,'profile.mobileprovision')]
-if os.environ['SIGNING_MODE'] == 'testflight':
-    files.append(('APP_STORE_CONNECT_KEY_BASE64','AuthKey.p8'))
-for key, name in files:
-    (root / name).write_bytes(base64.b64decode(os.environ[key]))
+for key, name in [('IOS_CERTIFICATE_BASE64','certificate.p12'),(profile,'profile.mobileprovision')]:
+    if not (root / name).exists():
+        (root / name).write_bytes(base64.b64decode(os.environ[key]))
 PY
   security cms -D -i "$signing_dir/profile.mobileprovision" > "$signing_dir/profile.plist"
   python3 - <<'PY'
@@ -129,15 +140,21 @@ project.save
 RUBY
 fi
 
+# The build repo is public, so hide the signing identity (the developer's name) from logs.
+redact() { sed -E 's/(Apple|iPhone) (Distribution|Development): [^"(]*/\1 \2: [hidden] /g'; }
 xcodebuild -workspace "$workspace" -scheme "$scheme" -configuration Release \
   -destination 'generic/platform=iOS' -archivePath build/JobCheck.xcarchive \
-  -resultBundlePath build/ArchiveResult.xcresult ${args[@]+"${args[@]}"} archive 2>&1 | tee build/archive.log
+  -resultBundlePath build/ArchiveResult.xcresult ${args[@]+"${args[@]}"} archive 2>&1 | redact | tee build/archive.log
 if [[ "$mode" == testflight ]]; then
-  xcodebuild -exportArchive -archivePath build/JobCheck.xcarchive     -exportPath build/upload -exportOptionsPlist build/ExportOptions.plist -allowProvisioningUpdates     -authenticationKeyPath "$signing_dir/AuthKey.p8" -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID"     -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" 2>&1 | tee build/upload.log
-  echo "Uploaded build $IOS_BUILD_NUMBER to App Store Connect. It appears in TestFlight after Apple finishes processing."
+  xcodebuild -exportArchive -archivePath build/JobCheck.xcarchive \
+    -exportPath build/upload -exportOptionsPlist build/ExportOptions.plist -allowProvisioningUpdates \
+    -authenticationKeyPath "$signing_dir/AuthKey.p8" -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
+    -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" 2>&1 | redact | tee build/upload.log
+  echo "Uploaded build $IOS_BUILD_NUMBER to App Store Connect."
+  [[ ! -f "$signing_dir/asc-state.json" ]] || node scripts/ci-signing.mjs finish "$signing_dir" "$IOS_BUILD_NUMBER"
 elif [[ "$mode" == adhoc ]]; then
   xcodebuild -exportArchive -archivePath build/JobCheck.xcarchive \
-    -exportPath build/ipa -exportOptionsPlist build/ExportOptions.plist 2>&1 | tee build/export.log
+    -exportPath build/ipa -exportOptionsPlist build/ExportOptions.plist 2>&1 | redact | tee build/export.log
   echo 'Signed Ad Hoc IPA exported. Only registered devices can install it.'
 else
   echo 'Native compilation passed. Unsigned archive is NOT installable on iPhone.'

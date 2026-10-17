@@ -29,6 +29,10 @@ node scripts/sync-build-repo.mjs --build testflight
 
 ## TestFlight 一次性設定（不需要 Mac）
 
+**最簡單：只設 API 金鑰。** 在公開打包專案的 Settings → Secrets and variables → Actions 新增三個 secrets：`APPLE_ASC_KEY_ID`（Key ID）、`APPLE_ASC_ISSUER_ID`（Issuer ID）、`APPLE_ASC_KEY_P8`（.p8 檔內容，原文或 Base64 都可以）。金鑰角色要「管理（Admin）」。每次打包時 `scripts/ci-signing.mjs` 會用這把金鑰臨時建立發佈憑證與 App Store 描述檔，上傳後等 Apple 處理完、交給內部測試群組（群組沒人時自動加入 App Store Connect 團隊成員），再撤銷憑證與描述檔，不佔名額。打包紀錄是公開的：腳本不印出金鑰、信箱、名字或 ID，xcodebuild 紀錄中的簽章身分會被遮掉，有簽章的建置也不上傳 xcresult。
+
+以下用 `setup-testflight.mjs` 的做法可選：改用一張長期保存的憑證，打包時就不會每次建立／撤銷。
+
 1. App Store Connect →「使用者與存取權限」→「整合」→「App Store Connect API」→ 團隊金鑰，新增一把「管理（Admin）」角色的金鑰。下載 `AuthKey_XXXX.p8`（只能下載一次），記下頁面上的 Issuer ID。建議把 .p8 放到 `D:\Secrets\job-check-ios\`。
 2. 在私人開發專案資料夾執行：
 
