@@ -2,6 +2,7 @@
 // npm install 後自動執行（postinstall）。
 // expo-ocr-kit 0.1.4 只辨識英文：iOS 沒設定辨識語言（Apple Vision 預設只有英文），
 // Android 只載入拉丁字母模型。中文職缺截圖會變成亂碼，公司名稱、職稱都抓不到。
+// Android 也改成一行一個文字區塊，長截圖切段辨識才接得起來。
 // 這裡補上繁體／簡體中文辨識；找不到要改的地方就讓安裝失敗，避免默默打包出只認英文的版本。
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
@@ -24,6 +25,29 @@ const patches = [
     done: 'import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions',
     find: 'import com.google.mlkit.vision.text.latin.TextRecognizerOptions',
     replace: 'import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions'
+  },
+  {
+    // ML Kit 回傳的是段落；改成一行一個區塊（和 iOS 一樣），長截圖切段時才不會整段重複。
+    file: `${root}/android/src/main/java/expo/modules/ocrkit/ExpoOcrKitModule.kt`,
+    done: 'block.lines.map { line ->',
+    find: [
+      '"blocks" to result.textBlocks.map { block ->',
+      '        mapOf(',
+      '          "text" to block.text,',
+      '          "boundingBox" to rectToMap(block.boundingBox, scaleFactor)',
+      '        )',
+      '      }'
+    ].join('\n'),
+    replace: [
+      '"blocks" to result.textBlocks.flatMap { block ->',
+      '        block.lines.map { line ->',
+      '          mapOf(',
+      '            "text" to line.text,',
+      '            "boundingBox" to rectToMap(line.boundingBox, scaleFactor)',
+      '          )',
+      '        }',
+      '      }'
+    ].join('\n')
   },
   {
     file: `${root}/android/build.gradle`,

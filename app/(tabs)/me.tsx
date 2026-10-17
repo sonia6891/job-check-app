@@ -5,7 +5,7 @@ import { router, useFocusEffect } from 'expo-router';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { supabase } from '@/src/lib/supabase';
 import { api } from '@/src/lib/api';
-import { authActions } from '@/src/lib/auth';
+import { authActions, LINE_PROVIDER } from '@/src/lib/auth';
 import type { TransferNotice } from '@/src/lib/accountTransferStatus';
 import { prefs } from '@/src/lib/prefs';
 import { MONTHLY_ANALYSIS_LIMIT } from '@/src/lib/usage';
@@ -17,6 +17,13 @@ import { Button, Chip, FocusStatusBar, Notice, Num, Screen, Surface, T } from '@
 import { ProgressBar } from '@/src/ui/viz';
 import { radius, shadow, space } from '@/src/theme/tokens';
 import Svg, { Path } from 'react-native-svg';
+
+function providerLabel(provider?: string) {
+  if (provider === 'apple') return 'Apple';
+  if (provider === 'google') return 'Google';
+  if (provider === LINE_PROVIDER) return 'LINE';
+  return '第三方帳號';
+}
 
 export default function MeScreen() {
   const { user, loading: authLoading, setupIssue } = useAuth();
@@ -151,6 +158,12 @@ export default function MeScreen() {
               onPress={() => void runBusy('apple', authActions.signInWithApple)}
             />
           ) : null}
+          <Pressable accessibilityRole="button" accessibilityLabel="用 LINE 繼續" disabled={Boolean(busy)}
+            onPress={() => void runBusy('line', authActions.signInWithLine)}
+            style={({ pressed }) => [styles.line, (pressed || busy === 'line') && { opacity: 0.7 }]}>
+            <Ionicons name="chatbubble" size={18} color="#FFFFFF" />
+            <T variant="subhead" color="#FFFFFF">{busy === 'line' ? '登入中…' : '用 LINE 繼續'}</T>
+          </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="用 Google 繼續" disabled={Boolean(busy)}
             onPress={() => void runBusy('google', authActions.signInWithGoogle)}
             style={({ pressed }) => [styles.google, (pressed || busy === 'google') && { opacity: 0.7 }]}>
@@ -166,7 +179,7 @@ export default function MeScreen() {
       ) : (
         <Surface style={{ borderRadius: 26 }}>
           <T variant="heading">正式帳號</T>
-          <T variant="caption" color={colors.textBody}>用 {user?.app_metadata?.provider === 'apple' ? 'Apple' : user?.app_metadata?.provider === 'google' ? 'Google' : '第三方帳號'} 登入</T>
+          <T variant="caption" color={colors.textBody}>用 {providerLabel(user?.app_metadata?.provider)} 登入</T>
           <Button compact variant="outline" icon="log-out-outline" label="登出" disabled={Boolean(busy)}
             onPress={() => void runBusy('logout', authActions.signOutToGuest, '已登出並切回新的訪客模式。')} />
         </Surface>
@@ -239,6 +252,8 @@ const styles = StyleSheet.create({
   avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   usageHead: { flexDirection: 'row', alignItems: 'baseline' },
   appleButton: { width: '100%', height: 52 },
+  // LINE 品牌綠。
+  line: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52, borderRadius: radius.lg, backgroundColor: '#06C755' },
   google: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.lineStrong },
   listCard: { backgroundColor: colors.surface, borderRadius: radius.xl, paddingHorizontal: space.lg, paddingVertical: 4, ...shadow.card },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },

@@ -144,6 +144,30 @@ async function finishPermanentSignIn(transfer: { token: string; expiresAt: strin
   return session;
 }
 
+export const LINE_PROVIDER = 'custom:line';
+
+// 在瀏覽器完成第三方登入，回到 App 後換成正式帳號並搬移訪客資料。
+async function signInWithBrowser(provider: 'google' | typeof LINE_PROVIDER, label: string) {
+  const transferToken = await issueGuestTransferToken();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo,
+      skipBrowserRedirect: true
+    }
+  });
+  if (error) throw error;
+  if (!data.url) throw new Error(`${label} 登入網址建立失敗。`);
+
+  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  if (result.type !== 'success' || !result.url) {
+    throw new Error(result.type === 'cancel' ? `已取消 ${label} 登入。` : `${label} 登入未完成。`);
+  }
+
+  await createSessionFromUrl(result.url);
+  return finishPermanentSignIn(transferToken);
+}
+
 export const authActions = {
   redirectTo,
 
@@ -169,25 +193,13 @@ export const authActions = {
     }
   },
 
-  async signInWithGoogle() {
-    const transferToken = await issueGuestTransferToken();
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo,
-        skipBrowserRedirect: true
-      }
-    });
-    if (error) throw error;
-    if (!data.url) throw new Error('Google 登入網址建立失敗。');
+  signInWithGoogle() {
+    return signInWithBrowser('google', 'Google');
+  },
 
-    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-    if (result.type !== 'success' || !result.url) {
-      throw new Error(result.type === 'cancel' ? '已取消 Google 登入。' : 'Google 登入未完成。');
-    }
-
-    await createSessionFromUrl(result.url);
-    return finishPermanentSignIn(transferToken);
+  // LINE 是 Supabase 的自訂 OIDC 登入（Auth Providers 裡的 custom:line）。
+  signInWithLine() {
+    return signInWithBrowser(LINE_PROVIDER, 'LINE');
   },
 
   async signInWithApple() {

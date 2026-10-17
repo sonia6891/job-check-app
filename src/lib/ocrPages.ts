@@ -12,7 +12,8 @@ export type OcrBox = { x: number; y: number; width: number; height: number };
 export type OcrBlockLike = { text: string; boundingBox?: OcrBox | null };
 export type Tile = { y: number; height: number; keepFrom: number; keepTo: number };
 
-const TALL_RATIO = 2.2;
+// 比任何手機螢幕都長才切段（20:9 的 Android 截圖約 2.22、21:9 約 2.33），一般截圖整張辨識。
+const TALL_RATIO = 2.6;
 
 export function isTallImage(width?: number, height?: number) {
   return Boolean(width && height && height > width * TALL_RATIO);

@@ -34,10 +34,17 @@ async function recognizeTall(image: OcrImage & { width: number; height: number }
   const { ImageManipulator, SaveFormat } = await import('expo-image-manipulator');
   const parts: string[] = [];
   for (const tile of tilePlan(image.width, image.height)) {
-    const rendered = await ImageManipulator.manipulate(image.uri)
-      .crop({ originX: 0, originY: tile.y, width: image.width, height: tile.height })
-      .renderAsync();
-    const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.95 });
+    const context = ImageManipulator.manipulate(image.uri)
+      .crop({ originX: 0, originY: tile.y, width: image.width, height: tile.height });
+    const rendered = await context.renderAsync();
+    let saved;
+    try {
+      saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.95 });
+    } finally {
+      // 每段都會解出整張大圖，用完馬上釋放，超長截圖才不會吃光記憶體。
+      rendered.release();
+      context.release();
+    }
     const raw = await recognizeRaw(saved.uri);
     parts.push(keepTileText(raw.blocks, tile, raw.text));
   }
