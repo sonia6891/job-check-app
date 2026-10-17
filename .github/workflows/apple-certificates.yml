@@ -1,0 +1,24 @@
+name: Apple Certificates (list)
+
+# 列出 Apple 開發者帳號裡的發佈憑證數量與到期日（不印名字），用來查「憑證已達上限」。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: List distribution certificates (types and dates only)
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID || secrets.APPLE_ASC_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID || secrets.APPLE_ASC_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 || secrets.APPLE_ASC_KEY_P8 }}
+        run: node scripts/ci-signing.mjs list "$RUNNER_TEMP"

@@ -7,6 +7,7 @@
 //   node scripts/ci-signing.mjs create <dir>           建立憑證與描述檔
 //   node scripts/ci-signing.mjs finish <dir> <build>   等 Apple 處理完、交給內部測試，再撤銷憑證
 //   node scripts/ci-signing.mjs cleanup <dir>          打包失敗時撤銷憑證（沒建立過就不做事）
+//   node scripts/ci-signing.mjs list <dir>             列出帳號裡的發佈憑證（只印類型與日期）
 import { createPrivateKey, randomBytes, sign } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -122,6 +123,7 @@ async function create() {
     cert = (await api('POST', '/certificates', { data: { type: 'certificates', attributes: {
       certificateType: 'DISTRIBUTION', csrContent: readFileSync(file('dist.csr'), 'utf8') } } })).data;
   } catch (e) {
+    if (e instanceof ApiError && e.status === 409) await list().catch(() => {});
     if (e instanceof ApiError && e.status === 409) fail('發佈憑證已達上限。請到 developer.apple.com → Certificates 撤銷一張不用的 Distribution 憑證後重新執行。Apple 回覆：' + e.message);
     throw e;
   }
@@ -202,6 +204,15 @@ async function waitForBuild(appId) {
   }
 }
 
+// 列出帳號裡的發佈憑證（只印類型與日期，不印名字）。到期日減一年約等於建立日。
+async function list() {
+  const certs = (await api('GET', '/certificates?limit=200')).data
+    .filter(c => /DISTRIBUTION/.test(c.attributes.certificateType));
+  console.log(`發佈憑證共 ${certs.length} 張：`);
+  certs.forEach((c, i) => console.log(`  ${i + 1}. ${c.attributes.certificateType}，到期 ${String(c.attributes.expirationDate).slice(0, 10)}`));
+  return certs;
+}
+
 async function cleanup() {
   const state = load();
   if (!state) return;
@@ -228,10 +239,10 @@ async function finish() {
 
 const commands = {
   key: async () => writeFileSync(file('AuthKey.p8'), keyText()),
-  create, finish, cleanup
+  create, finish, cleanup, list
 };
 async function main() {
-  if (!commands[command] || !dir) fail('用法：node scripts/ci-signing.mjs key|create|finish|cleanup <dir> [build]');
+  if (!commands[command] || !dir) fail('用法：node scripts/ci-signing.mjs key|create|finish|cleanup|list <dir> [build]');
   if (command === 'finish' && !/^\d+$/.test(buildNumber || '')) fail('finish 需要建置號');
   await commands[command]();
 }
