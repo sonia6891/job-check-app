@@ -44,6 +44,8 @@ export function Screen({ children, header, hero, footer, safeTop, tabBar, scroll
         ? <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: padTop, paddingBottom: padBottom }}>{body}</ScrollView>
         : <View style={{ flex: 1, paddingTop: padTop }}>{body}</View>}
       {footer ? <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, space.lg) }]}>{footer}</View> : null}
+      {/* 往下捲時內容不會疊到時間、電池那一列。 */}
+      {padTop ? <View pointerEvents="none" style={[styles.statusBarBackdrop, { height: insets.top }]} /> : null}
     </View>
   );
 }
@@ -309,6 +311,7 @@ export { colors };
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
+  statusBarBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: colors.bg },
   content: { paddingHorizontal: space.lg, gap: space.lg },
   footer: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl, paddingHorizontal: space.lg, paddingTop: space.md + 2, ...shadow.bar },
   sectionTitle: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.xs, marginTop: space.xs },
