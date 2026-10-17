@@ -48,12 +48,10 @@ for (const [path, width, height, label] of resolved) {
       label + ' must be ' + width + 'x' + height);
   }
 }
-const approvedSource = 'assets/brand/logo-light-preview.png';
-check(existsSync(approvedSource), 'User-approved original logo image missing');
-if (existsSync(approvedSource)) {
-  const [w, h] = pngSize(approvedSource);
-  if (w < 1024 || h < 1024)
-    pending.push('Icon is a faithful upscale of approved low-resolution master; review a native 1024px original before App Store submission');
+check(existsSync('assets/brand/app-icon.svg'), 'Vector icon master assets/brand/app-icon.svg missing');
+// App Store rejects store icons with an alpha channel (PNG color type 6).
+if (app.icon && existsSync(app.icon)) {
+  check(readFileSync(app.icon)[25] !== 6, 'iOS store icon must not have an alpha channel');
 }
 
 const lines = [

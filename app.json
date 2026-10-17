@@ -22,11 +22,11 @@
         {
           "image": "./assets/generated/splash-mark.png",
           "imageWidth": 200,
-          "backgroundColor": "#0F2747",
+          "backgroundColor": "#FBF6EE",
           "resizeMode": "contain",
           "dark": {
             "image": "./assets/generated/splash-mark.png",
-            "backgroundColor": "#071A2F"
+            "backgroundColor": "#FBF6EE"
           }
         }
       ],
@@ -45,7 +45,7 @@
       "package": "com.lumilab.jobcheck",
       "adaptiveIcon": {
         "foregroundImage": "./assets/generated/adaptive-foreground.png",
-        "backgroundColor": "#FFFFFF"
+        "backgroundColor": "#FF6B4A"
       }
     },
     "icon": "./assets/generated/app-icon.png",

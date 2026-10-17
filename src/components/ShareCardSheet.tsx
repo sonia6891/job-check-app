@@ -7,6 +7,7 @@ import * as Sharing from 'expo-sharing';
 import { colors, onBrand, radius, space, tone as toneStyles } from '@/src/theme/tokens';
 import { Button, T } from '@/src/ui';
 import type { ShareCardItem } from '@/src/lib/shareCard';
+import { BrandIcon } from '@/src/components/BrandIcon';
 import { showMessage } from '@/src/lib/uiAlerts';
 
 type Props = {
@@ -76,7 +77,7 @@ export function ShareCardSheet({ visible, jobLine, verdict, items, onClose, onSh
 
           <View ref={cardRef} collapsable={false} style={styles.card} accessible accessibilityLabel={`分享圖片：${jobLine}。${verdict.replace('\n', '')}`}>
             <View style={styles.cardHead}>
-              <View style={styles.logo}><Ionicons name="search" size={18} color={colors.primary} /></View>
+              <BrandIcon size={34} border={colors.surface} />
               <View style={{ flex: 1 }}>
                 <T variant="subhead" color={onBrand.text}>職缺體檢</T>
                 <T variant="label" color={onBrand.muted}>我幫這份工作做了體檢</T>
@@ -119,7 +120,6 @@ const styles = StyleSheet.create({
   grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: colors.lineStrong },
   card: { alignSelf: 'center', width: 320, minHeight: 400, backgroundColor: colors.bg, borderRadius: 28, overflow: 'hidden', borderWidth: 1, borderColor: colors.line },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.primary, paddingHorizontal: 18, paddingVertical: 14 },
-  logo: { width: 32, height: 32, borderRadius: 10, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   cardBody: { flex: 1, padding: 18, gap: 12 },
   item: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 },
   cardFoot: { backgroundColor: colors.surface, paddingHorizontal: 18, paddingVertical: 12, gap: 4 },

@@ -1,34 +1,35 @@
-import { mkdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { mkdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import sharp from 'sharp';
 
-const source = 'assets/brand/logo-light-preview.png';
+// 唯一來源：向量母檔。所有圖示都從這裡產生，產物不進 Git。
+const source = 'assets/brand/app-icon.svg';
 const output = 'assets/generated';
 await mkdir(output, { recursive: true });
 await mkdir('public', { recursive: true });
 
-// Approved artwork only: resize, never redraw or replace with a different logo.
-const image = sharp(source);
-const { width, height } = await image.metadata();
-if (!width || !height || width < 64 || height < 64) {
-  throw new Error('Approved brand image is missing or too small to process.');
+const icon = await readFile(source, 'utf8');
+if (!icon.includes('id="background"') || !icon.includes('id="mark"')) {
+  throw new Error(source + ' must keep the background rect and the mark group.');
 }
-await sharp(source).resize(1024, 1024, { fit: 'fill', kernel: 'lanczos3' })
-  .png().toFile(join(output, 'app-icon.png'));
+// 只留圖案：拿掉背景，畫布裁到圖案範圍（含線寬），給啟動畫面與 Android 前景用。
+const mark = icon
+  .replace(/<rect id="background"[^>]*\/>/, '')
+  .replace('width="1024" height="1024" viewBox="0 0 1024 1024"', 'width="703" height="763" viewBox="201 125 703 763"');
 
-const inset = 704;
-const artwork = await sharp(source).resize(inset, inset, { kernel: 'lanczos3' }).png().toBuffer();
-await sharp({ create: { width: 1024, height: 1024, channels: 4, background: '#FFFFFF00' } })
-  .composite([{ input: artwork, left: (1024 - inset) / 2, top: (1024 - inset) / 2 }])
-  .png().toFile(join(output, 'adaptive-foreground.png'));
+const render = (svg, size) => sharp(Buffer.from(svg), { density: 300 }).resize(size, size, { fit: 'contain', background: '#00000000' });
+const centered = async (svg, inner, file) => {
+  const art = await render(svg, inner).png().toBuffer();
+  await sharp({ create: { width: 1024, height: 1024, channels: 4, background: '#00000000' } })
+    .composite([{ input: art, gravity: 'center' }]).png().toFile(file);
+};
 
-// The native splash-screen config plugin supplies the navy background; transparent canvas
-// here keeps the approved white-square logo inside its safe area.
-await sharp({ create: { width: 1024, height: 1024, channels: 4, background: '#FFFFFF00' } })
-  .composite([{ input: artwork, left: (1024 - inset) / 2, top: (1024 - inset) / 2 }])
-  .png().toFile(join(output, 'splash-mark.png'));
-
-await sharp(source).resize(192, 192).png().toFile('public/icon-192.png');
-await sharp(source).resize(512, 512).png().toFile('public/icon-512.png');
-console.log('Prepared approved-brand assets:', width + '×' + height, 'source; 1024 icon, adaptive foreground, splash mark, web icons.');
-console.log('WARNING: source is 72px approved preview; generated icons are provisional and require a true high-resolution master before store review.');
+// App Store 不接受透明圖層，主圖示要拿掉 alpha。
+await render(icon, 1024).removeAlpha().png().toFile(join(output, 'app-icon.png'));
+// Android 只保證中間 66/108 的圓形範圍會顯示。
+await centered(mark, 540, join(output, 'adaptive-foreground.png'));
+// 啟動畫面的底色在 app.json（奶油米），這裡只放圖案。
+await centered(mark, 900, join(output, 'splash-mark.png'));
+await render(icon, 192).removeAlpha().png().toFile('public/icon-192.png');
+await render(icon, 512).removeAlpha().png().toFile('public/icon-512.png');
+console.log('Prepared brand assets from', source + ': 1024 icon, adaptive foreground, splash mark, web icons.');

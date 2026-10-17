@@ -48,12 +48,22 @@ class ApiError extends Error {
   constructor(status, detail) { super(detail); this.status = status; }
 }
 
-async function api(method, path, body) {
-  const res = await fetch(API + path, {
-    method,
-    headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined
-  });
+async function api(method, path, body, attempt = 1) {
+  let res;
+  try {
+    res = await fetch(API + path, {
+      method,
+      headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined
+    });
+  } catch (e) {
+    // 連線問題時重試查詢與刪除；建立類的請求不重試，避免重複建立憑證。
+    if (method !== 'POST' && attempt < 3) {
+      await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+      return api(method, path, body, attempt + 1);
+    }
+    throw e;
+  }
   const text = await res.text();
   let json = {};
   try { json = text ? JSON.parse(text) : {}; } catch { /* 非 JSON 錯誤頁 */ }
