@@ -14,7 +14,8 @@
     "check:report-function": "node scripts/verify-report-function.mjs",
     "check:native-config": "node scripts/verify-native-config.mjs",
     "assets:brand": "node scripts/prepare-brand-assets.mjs",
-    "prestart": "npm run assets:brand"
+    "prestart": "npm run assets:brand",
+    "postinstall": "node scripts/patch-native-modules.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
@@ -30,7 +31,7 @@
     "expo-image-picker": "~57.0.20",
     "expo-linear-gradient": "~57.0.2",
     "expo-linking": "~57.0.11",
-    "expo-ocr-kit": "^0.1.4",
+    "expo-ocr-kit": "0.1.4",
     "expo-router": "~57.0.23",
     "expo-secure-store": "~57.0.4",
     "expo-sharing": "~57.0.23",

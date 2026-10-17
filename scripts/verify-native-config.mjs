@@ -49,6 +49,11 @@ for (const [path, width, height, label] of resolved) {
   }
 }
 check(existsSync('assets/brand/app-icon.svg'), 'Vector icon master assets/brand/app-icon.svg missing');
+// expo-ocr-kit only reads English unless scripts/patch-native-modules.mjs ran (npm postinstall).
+const ocrModule = 'node_modules/expo-ocr-kit/ios/ExpoOcrKitModule.swift';
+if (existsSync(ocrModule)) {
+  check(readFileSync(ocrModule, 'utf8').includes('"zh-Hant"'), 'expo-ocr-kit is missing the Chinese OCR patch (run npm install)');
+}
 // App Store rejects store icons with an alpha channel (PNG color type 6).
 if (app.icon && existsSync(app.icon)) {
   check(readFileSync(app.icon)[25] !== 6, 'iOS store icon must not have an alpha channel');
