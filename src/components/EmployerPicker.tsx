@@ -8,7 +8,10 @@ import { Button, IconButton, Notice, T } from '@/src/ui';
 
 const registryLabel: Record<string, string> = {
   gcis_company: '公司登記',
-  gcis_business: '商業登記'
+  gcis_business: '商業登記',
+  // 經濟部網站停擺時改查的 g0v 鏡像，資料同樣來自公司／商業登記。
+  g0v_company_mirror: '公司登記',
+  g0v_business_mirror: '商業登記'
 };
 
 function candidateKey(c: Pick<EmployerCandidate, 'entity_type' | 'tax_id'>) {

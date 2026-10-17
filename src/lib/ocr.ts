@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { stripScreenChrome } from '@/src/lib/ocrClean';
+import { fixOcrConfusions, stripScreenChrome } from '@/src/lib/ocrClean';
 
 export type OcrResult = {
   text: string;
@@ -31,7 +31,7 @@ export async function recognizeTextFromLocalImage(uri: string): Promise<OcrResul
   try {
     const module = await import('expo-ocr-kit');
     const result = await module.recognizeText(uri);
-    const text = stripScreenChrome(normalizeRecognizedText(result?.text ?? ''));
+    const text = fixOcrConfusions(stripScreenChrome(normalizeRecognizedText(result?.text ?? '')));
 
     if (!text) throw new Error('ocr_no_text_detected');
 

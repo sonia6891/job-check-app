@@ -23,3 +23,11 @@ export function stripScreenChrome(text: string) {
   while (start < lines.length && start < 8 && isScreenChromeLine(lines[start])) start++;
   return lines.slice(start).join('\n').trim();
 }
+
+// Apple 文字辨識常見的錯字（「早午餐」辨識成「早午䬸」「早午餮」）。與後端 parse-job/rules.ts 相同。
+export function fixOcrConfusions(text: string) {
+  return text
+    .replace(/䬸/g, '餐')
+    .replace(/早午餮/g, '早午餐')
+    .replace(/餮(館|廳|飲|點|車)/g, '餐$1');
+}
