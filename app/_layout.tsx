@@ -21,6 +21,7 @@ export default function RootLayout() {
         <Stack.Screen name="report/[jobId]" options={{ title: '體檢報告', headerShown: false }} />
         <Stack.Screen name="progress" options={{ title: '求職進度' }} />
         <Stack.Screen name="compare" options={{ title: '比較職缺' }} />
+        <Stack.Screen name="plans" options={{ title: 'Pro 方案' }} />
         <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
         <Stack.Screen name="privacy" options={{ title: "隱私與資料管理" }} />
         <Stack.Screen name="job/edit/[jobId]" options={{ title: "修正職缺資訊" }} />

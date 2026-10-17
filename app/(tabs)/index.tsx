@@ -14,7 +14,7 @@ import type { JobCardData } from '@/src/components/JobCard';
 import { colors, onBrand, radius, shadow, space } from '@/src/theme/tokens';
 import { Button, FocusStatusBar, IconCircle, Num, Screen, SectionTitle, T } from '@/src/ui';
 import { showMessage } from '@/src/lib/uiAlerts';
-import { MONTHLY_ANALYSIS_LIMIT } from '@/src/lib/usage';
+import { freeMonthlyLimit, paymentsEnabled, usePlan } from '@/src/lib/plan';
 import { relativeDay } from '@/src/lib/myJobs';
 
 type PendingOcr = {
@@ -24,7 +24,7 @@ type PendingOcr = {
   result: OcrResult;
 };
 type InputMode = 'text' | 'url' | 'image';
-type Quota = { kind: 'loading' } | { kind: 'error' } | { kind: 'count'; remaining: number };
+type Quota = { kind: 'loading' } | { kind: 'error' } | { kind: 'count'; used: number };
 type RecentJob = JobCardData & { created_at?: string | null };
 
 /** 小提醒輪流出現，一天換一則。內容都是勞動法規的基本常識。 */
@@ -66,6 +66,7 @@ export default function HomeScreen() {
   const [recent, setRecent] = useState<RecentJob[] | null>(null);
   const [recentError, setRecentError] = useState<string | null>(null);
   const [quota, setQuota] = useState<Quota>({ kind: 'loading' });
+  const plan = usePlan();
   const [pendingOcr, setPendingOcr] = useState<PendingOcr | null>(null);
   const [reviewText, setReviewText] = useState(false);
   const [ocrText, setOcrText] = useState('');
@@ -92,6 +93,7 @@ export default function HomeScreen() {
   useFocusEffect(useCallback(() => {
     prefs.getKeepOriginal().then(setKeepOriginal);
     void init();
+    void plan.refresh();
   }, []));
 
   async function init() {
@@ -129,7 +131,7 @@ export default function HomeScreen() {
         const used = (usageResult.data ?? [])
           .filter(x => x.period_start === month)
           .reduce((total, item) => total + (item.units || 0), 0);
-        setQuota({ kind: 'count', remaining: Math.max(0, MONTHLY_ANALYSIS_LIMIT - used) });
+        setQuota({ kind: 'count', used });
       }
     } catch (error: any) {
       setRecentError(error?.message || '目前無法載入最近的職缺。');
@@ -292,6 +294,7 @@ export default function HomeScreen() {
     setOcrText('');
   }
 
+  const remaining = quota.kind === 'count' ? Math.max(0, freeMonthlyLimit - quota.used) : 0;
   const now = new Date();
   const tip = TIPS[Math.floor(now.getTime() / 86400000) % TIPS.length];
   const urlMode = mode === 'url';
@@ -387,14 +390,24 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
-          <View style={styles.quota} accessible accessibilityLabel={quota.kind === 'count' ? `免費，這個月還可以檢查 ${quota.remaining} 次，每月 ${MONTHLY_ANALYSIS_LIMIT} 次` : '本月檢查次數'}>
-            {quota.kind === 'count' ? (
-              <View style={styles.quotaTrack}><View style={[styles.quotaFill, { width: `${(quota.remaining / MONTHLY_ANALYSIS_LIMIT) * 100}%` }]} /></View>
-            ) : quota.kind === 'loading' ? <ActivityIndicator size="small" color="#FFFFFF" /> : null}
-            <T variant="caption" color={onBrand.muted}>
-              {quota.kind === 'count' ? `免費・這個月還可以檢查 ${quota.remaining} 次` : quota.kind === 'error' ? '暫時讀不到本月次數' : '讀取本月次數…'}
-            </T>
-          </View>
+          {plan.pro ? (
+            <View style={styles.quota} accessible accessibilityLabel="Pro 方案，不限次數">
+              <Ionicons name="sparkles" size={16} color="#FFFFFF" />
+              <T variant="caption" color={onBrand.muted}>Pro・不限次數</T>
+            </View>
+          ) : (
+            <Pressable accessibilityRole={paymentsEnabled ? 'button' : undefined} style={styles.quota} disabled={!paymentsEnabled} onPress={() => router.push('/plans')}
+              accessibilityLabel={quota.kind === 'count' ? `免費，這個月還可以檢查 ${remaining} 次，每月 ${freeMonthlyLimit} 次` : '本月檢查次數'}>
+              {quota.kind === 'count' ? (
+                <View style={styles.quotaTrack}><View style={[styles.quotaFill, { width: `${(remaining / freeMonthlyLimit) * 100}%` }]} /></View>
+              ) : quota.kind === 'loading' ? <ActivityIndicator size="small" color="#FFFFFF" /> : null}
+              <T variant="caption" color={onBrand.muted}>
+                {quota.kind === 'count'
+                  ? (remaining > 0 ? `免費・這個月還可以檢查 ${remaining} 次` : paymentsEnabled ? '這個月的免費次數用完了・看 Pro 方案' : '這個月的次數用完了，下個月 1 日恢復')
+                  : quota.kind === 'error' ? '暫時讀不到本月次數' : '讀取本月次數…'}
+              </T>
+            </Pressable>
+          )}
         </View>
 
         <SetupBanner reason={setupReason} />

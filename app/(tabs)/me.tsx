@@ -8,7 +8,7 @@ import { api } from '@/src/lib/api';
 import { authActions, LINE_PROVIDER } from '@/src/lib/auth';
 import type { TransferNotice } from '@/src/lib/accountTransferStatus';
 import { prefs } from '@/src/lib/prefs';
-import { MONTHLY_ANALYSIS_LIMIT } from '@/src/lib/usage';
+import { freeMonthlyLimit, paymentsEnabled, usePlan } from '@/src/lib/plan';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { SetupBanner } from '@/src/components/SetupBanner';
 import { colors } from '@/src/theme/colors';
@@ -29,6 +29,7 @@ export default function MeScreen() {
   const { user, loading: authLoading, setupIssue } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [used, setUsed] = useState(0);
+  const plan = usePlan();
   const [busy, setBusy] = useState<string | null>(null);
   const [appleAvailable, setAppleAvailable] = useState(false);
   const [keepOriginal, setKeepOriginal] = useState(false);
@@ -57,6 +58,7 @@ export default function MeScreen() {
 
   useFocusEffect(useCallback(() => {
     void reload();
+    void plan.refresh();
     void prefs.getKeepOriginal().then(setKeepOriginal);
     // Recover a short-lived native encrypted transfer credential after an App restart.
     void authActions.restoreGuestTransfer().then(setGuestTransfer).catch(() => {
@@ -107,7 +109,7 @@ export default function MeScreen() {
       <View style={{ flex: 1, gap: 4 }}>
         <T variant="title" numberOfLines={1} accessibilityRole="header">{profile?.display_name || (permanent ? user?.email || '正式帳號' : '訪客使用者')}</T>
         <View style={styles.profileMeta}>
-          <Chip tone="neutral" label="全部免費" />
+          {plan.pro ? <Chip tone="coral" label="Pro" /> : <Chip tone="neutral" label={paymentsEnabled ? '免費版' : '全部免費'} />}
           <T variant="caption" muted style={{ flex: 1 }} numberOfLines={1}>{permanent ? '正式帳號・換手機也能找回資料' : '不用註冊就能體檢'}</T>
         </View>
       </View>
@@ -125,13 +127,30 @@ export default function MeScreen() {
       ) : null}
 
       <Surface style={{ borderRadius: 26 }}>
-        <View style={styles.usageHead}>
-          <T variant="bodyStrong" style={{ flex: 1 }}>這個月用了（全部免費）</T>
-          <Num size={22} color={colors.primary}>{used}</Num>
-          <T variant="captionStrong" muted> / {MONTHLY_ANALYSIS_LIMIT} 次</T>
-        </View>
-        <ProgressBar value={used / MONTHLY_ANALYSIS_LIMIT} color={colors.primary} />
-        <T variant="small" muted>每月 1 日重新計算。同一份職缺重新檢查不會重複算。</T>
+        {plan.pro ? (
+          <>
+            <View style={styles.usageHead}>
+              <T variant="bodyStrong" style={{ flex: 1 }}>Pro・這個月檢查了</T>
+              <Num size={22} color={colors.primary}>{used}</Num>
+              <T variant="captionStrong" muted> 次</T>
+            </View>
+            <T variant="small" muted>Pro 不限次數。詐騙警訊和違規紀錄對所有人都免費。</T>
+          </>
+        ) : (
+          <>
+            <View style={styles.usageHead}>
+              <T variant="bodyStrong" style={{ flex: 1 }}>{paymentsEnabled ? '這個月用了（免費版）' : '這個月用了（全部免費）'}</T>
+              <Num size={22} color={colors.primary}>{used}</Num>
+              <T variant="captionStrong" muted> / {freeMonthlyLimit} 次</T>
+            </View>
+            <ProgressBar value={Math.min(1, used / freeMonthlyLimit)} color={colors.primary} />
+            <T variant="small" muted>每月 1 日重新計算。同一份職缺重新檢查不會重複算。</T>
+          </>
+        )}
+        {paymentsEnabled ? (
+          <Button compact variant={plan.pro ? 'outline' : 'primary'} icon="sparkles"
+            label={plan.pro ? '管理 Pro 訂閱' : '升級 Pro・不限次數'} onPress={() => router.push('/plans')} />
+        ) : null}
       </Surface>
 
       {permanent && guestTransfer.status !== 'none' && guestTransfer.status !== 'completed' ? (

@@ -19,7 +19,8 @@ export async function normalizeFunctionError(error: unknown): Promise<Error & { 
     const code = normalized.payload.error;
     if (typeof code === 'string') {
       const descriptions: Record<string, string> = {
-        analysis_quota_exceeded: '這個月的體檢次數已用完，下個月 1 日會恢復。',
+        analysis_quota_exceeded: '這個月的免費體檢次數已用完，升級 Pro 可以繼續檢查，或等下個月 1 日恢復。',
+        feature_requires_pro: '這項功能是 Pro 方案的功能。',
         job_not_found: '找不到這份職缺，請重新整理。',
         unauthorized: '登入狀態已失效，請重新登入。',
         quota_check_failed: '暫時無法確認體檢額度，請稍後再試。'

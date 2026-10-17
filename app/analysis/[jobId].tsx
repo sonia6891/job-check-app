@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { MONTHLY_ANALYSIS_LIMIT } from '@/src/lib/usage';
+import { freeMonthlyLimit, paymentsEnabled } from '@/src/lib/plan';
 import { api } from '@/src/lib/api';
 import { supabase } from '@/src/lib/supabase';
 import { colors, space } from '@/src/theme/tokens';
@@ -242,9 +242,10 @@ export default function AnalysisScreen() {
 
       {quotaExceeded ? (
         <View style={{ gap: space.md }}>
-          <Notice tone="info" title="每月免費 30 次">
-            {`每人每月可以完整檢查 ${MONTHLY_ANALYSIS_LIMIT} 次（全部免費），下個月 1 日重新計算；同一份職缺重新檢查不會重複算。這份職缺已經存在「我的職缺」。`}
+          <Notice tone="info" title={`這個月的 ${freeMonthlyLimit} 次免費檢查用完了`}>
+            {`${paymentsEnabled ? '升級 Pro 就能不限次數繼續檢查；也可以' : '可以'}等下個月 1 日恢復。同一份職缺重新檢查不會重複算，這份職缺已經存在「我的職缺」。`}
           </Notice>
+          {paymentsEnabled ? <Button icon="sparkles" label="升級 Pro・不限次數" onPress={() => router.push('/plans')} /> : null}
           <Button variant="soft" label="回我的職缺" onPress={() => router.replace('/jobs')} />
         </View>
       ) : null}

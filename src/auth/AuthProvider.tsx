@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { ensureGuestSession, supabase } from '@/src/lib/supabase';
+import { billing } from '@/src/lib/billing';
 
 type AuthContextValue = {
   session: Session | null;
@@ -47,6 +48,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!mounted) return;
       setSession(nextSession);
+      // 訂閱跟著目前的帳號（訪客也算）；RevenueCat 失敗不影響登入。
+      if (nextSession?.user) void billing.identify(nextSession.user.id).catch(() => {});
     });
 
     return () => {

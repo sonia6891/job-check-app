@@ -5,6 +5,7 @@ import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from './supabase';
 import { api } from './api';
+import { billing } from './billing';
 import { prefs } from './prefs';
 import { describeTransferResult, transferExpired, type TransferNotice } from './accountTransferStatus';
 import { transferVault, type PendingGuestTransfer } from './transferVault';
@@ -141,6 +142,9 @@ async function finishPermanentSignIn(transfer: { token: string; expiresAt: strin
   } else {
     transferNotice = { status: 'none', message: '' };
   }
+  // 訂閱狀態刷新失敗不能讓成功的登入看起來像失敗；之後可在方案頁重試。
+  try { await billing.identify(session.user.id); }
+  catch { /* RevenueCat 可稍後重試 */ }
   return session;
 }
 
@@ -256,10 +260,12 @@ export const authActions = {
     transferNotice = { status: 'none', message: '' };
     await transferVault.clear().catch(() => {});
     await prefs.setDraft({ text: '', sourceUrl: null });
+    await billing.logOut().catch(() => {});
     // 帳號已刪除，只清本機 Session，不再呼叫伺服器登出。
     await supabase.auth.signOut({ scope: 'local' });
     const { data, error } = await supabase.auth.signInAnonymously();
     if (error) throw error;
+    if (data.user) await billing.identify(data.user.id).catch(() => null);
     return data.session;
   },
 
@@ -268,11 +274,13 @@ export const authActions = {
     if (pendingGuestTransfer || transferNotice.status === 'expired') {
       throw new Error('訪客資料轉移尚未安全完成。請先重試或聯絡客服，避免紀錄遺失。');
     }
+    await billing.logOut();
     await supabase.auth.signOut();
     await transferVault.clear().catch(() => {});
     transferNotice = { status: 'none', message: '' };
     const { data, error } = await supabase.auth.signInAnonymously();
     if (error) throw error;
+    if (data.user) await billing.identify(data.user.id).catch(() => null);
     return data.session;
   }
 };

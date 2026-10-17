@@ -10,6 +10,7 @@ import { showMessage } from '@/src/lib/uiAlerts';
 import { CompareTable, type CompareJob } from '@/src/components/JobCompareResultCard';
 import { chooseSavedForComparison } from '@/src/lib/compareSelection';
 import { validateCompareResults } from '@/src/lib/compareValidation';
+import { paymentsEnabled, usePlan } from '@/src/lib/plan';
 
 export default function CompareScreen() {
   const { source } = useLocalSearchParams<{ source?: string }>();
@@ -22,6 +23,7 @@ export default function CompareScreen() {
   const [compareError, setCompareError] = useState<string | null>(null);
   const [refreshCount, setRefreshCount] = useState(0);
   const requestVersion = useRef(0);
+  const plan = usePlan();
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -107,8 +109,19 @@ export default function CompareScreen() {
     );
   }
 
-  if (!ready) {
+  if (!ready || plan.loading) {
     return <Screen>{[0, 1, 2].map(i => <View key={i} style={styles.skeleton} />)}</Screen>;
+  }
+
+  // 並排比較是 Pro 功能；後端 compare-jobs 也會檢查，這裡先說明並引導升級。
+  if (paymentsEnabled && !plan.pro) {
+    return (
+      <Screen>
+        <Empty icon="sparkles" title="並排比較是 Pro 功能"
+          body="把 2～5 份職缺的薪資、工時、休假和公司紀錄排在一起看，一眼找出哪份比較好。升級 Pro 也能不限次數檢查職缺。"
+          action={<Button icon="sparkles" label="看 Pro 方案" onPress={() => router.push('/plans')} />} />
+      </Screen>
+    );
   }
 
   if (jobs.length < 2) {
@@ -123,7 +136,7 @@ export default function CompareScreen() {
 
   return (
     <Screen>
-      <T variant="caption" muted style={{ paddingHorizontal: space.xs }}>{source === 'saved' ? '從收藏裡挑 2–5 份，並排看條件。' : '挑 2–5 份檢查過的工作，並排看條件。'}全部免費。</T>
+      <T variant="caption" muted style={{ paddingHorizontal: space.xs }}>{source === 'saved' ? '從收藏裡挑 2–5 份，並排看條件。' : '挑 2–5 份檢查過的工作，並排看條件。'}</T>
 
       <View style={{ gap: 10 }}>
         {jobs.map((j) => {
