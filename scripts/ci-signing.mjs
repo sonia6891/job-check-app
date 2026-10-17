@@ -17,6 +17,8 @@ const BUNDLE_ID = 'com.lumilab.jobcheck';
 // ASC_API_BASE 只給測試用的假伺服器。
 const API = process.env.ASC_API_BASE || 'https://api.appstoreconnect.apple.com/v1';
 const [command, dir, buildNumber] = process.argv.slice(2);
+// 測試可以把等待縮短。
+const CERT_RETRY_MS = Number(process.env.ASC_CERT_RETRY_MS || 60000);
 const file = name => join(dir, name);
 const statePath = () => file('asc-state.json');
 
@@ -119,13 +121,21 @@ async function create() {
   writeFileSync(file('csr.cnf'), '[req]\nprompt = no\ndistinguished_name = dn\n[dn]\nCN = JobCheck CI Distribution\n');
   openssl(['req', '-new', '-newkey', 'rsa:2048', '-nodes', '-config', file('csr.cnf'), '-keyout', file('dist.key'), '-out', file('dist.csr')]);
   let cert;
-  try {
-    cert = (await api('POST', '/certificates', { data: { type: 'certificates', attributes: {
-      certificateType: 'DISTRIBUTION', csrContent: readFileSync(file('dist.csr'), 'utf8') } } })).data;
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 409) await list().catch(() => {});
-    if (e instanceof ApiError && e.status === 409) fail('發佈憑證已達上限。請到 developer.apple.com → Certificates 撤銷一張不用的 Distribution 憑證後重新執行。Apple 回覆：' + e.message);
-    throw e;
+  // Apple 偶爾會暫時回「憑證已達上限」（2026-10-17 遇過，帳號裡其實只有 1 張），等一分鐘再試。
+  for (let attempt = 1; !cert; attempt++) {
+    try {
+      cert = (await api('POST', '/certificates', { data: { type: 'certificates', attributes: {
+        certificateType: 'DISTRIBUTION', csrContent: readFileSync(file('dist.csr'), 'utf8') } } })).data;
+    } catch (e) {
+      if (!(e instanceof ApiError && e.status === 409)) throw e;
+      if (attempt < 3) {
+        console.log(`Apple 說發佈憑證已達上限，${attempt} 分鐘後重試…`);
+        await new Promise(resolve => setTimeout(resolve, CERT_RETRY_MS * attempt));
+        continue;
+      }
+      await list().catch(() => {});
+      fail('發佈憑證已達上限。請到 developer.apple.com → Certificates 撤銷一張不用的 Distribution 憑證後重新執行。Apple 回覆：' + e.message);
+    }
   }
   const state = { appId: app.id, certId: cert.id };
   save(state);

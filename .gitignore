@@ -12,3 +12,6 @@ public/icon-192.png
 public/icon-512.png
 .env.local
 .env.preview-bak
+
+# Supabase CLI temp files
+supabase/.temp/
