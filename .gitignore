@@ -1,0 +1,14 @@
+node_modules/
+.expo/
+dist/
+.env
+*.log
+.DS_Store
+.claude/settings.local.json
+
+# Auto-generated icon assets, regenerate with npm run assets:brand
+assets/generated/
+public/icon-192.png
+public/icon-512.png
+.env.local
+.env.preview-bak

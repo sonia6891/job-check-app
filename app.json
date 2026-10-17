@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "職缺體檢",
+    "slug": "job-check-mobile",
+    "scheme": "jobcheck",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "允許職缺體檢讀取你選擇的職缺截圖，用於本機文字辨識與分析。",
+          "cameraPermission": "允許職缺體檢拍攝職缺內容，用於本機文字辨識與分析。"
+        }
+      ],
+      "expo-apple-authentication",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/generated/splash-mark.png",
+          "imageWidth": 200,
+          "backgroundColor": "#0F2747",
+          "resizeMode": "contain",
+          "dark": {
+            "image": "./assets/generated/splash-mark.png",
+            "backgroundColor": "#071A2F"
+          }
+        }
+      ],
+      "expo-font",
+      "expo-sharing"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.lumilab.jobcheck",
+      "usesAppleSignIn": true,
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.lumilab.jobcheck",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/generated/adaptive-foreground.png",
+        "backgroundColor": "#FFFFFF"
+      }
+    },
+    "icon": "./assets/generated/app-icon.png",
+    "web": {
+      "favicon": "./public/icon-192.png"
+    }
+  }
+}

@@ -1,0 +1,107 @@
+name: iOS Native (No Expo Account)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'unsigned = compile check; adhoc = installable signed IPA; testflight = upload to TestFlight'
+        type: choice
+        options: [unsigned, adhoc, testflight]
+        default: unsigned
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-native-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate native build script
+        run: bash -n scripts/build-ios.sh
+      - name: Require signing inputs for a signed build
+        if: inputs.mode == 'adhoc' || inputs.mode == 'testflight'
+        env:
+          MODE: ${{ inputs.mode }}
+          IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
+          IOS_APPSTORE_PROFILE_BASE64: ${{ secrets.IOS_APPSTORE_PROFILE_BASE64 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          keys='IOS_CERTIFICATE_BASE64 IOS_CERTIFICATE_PASSWORD IOS_PROFILE_BASE64'
+          if [[ "$MODE" == testflight ]]; then
+            keys='IOS_CERTIFICATE_BASE64 IOS_CERTIFICATE_PASSWORD IOS_APPSTORE_PROFILE_BASE64 APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_BASE64'
+          fi
+          for key in $keys; do
+            test -n "${!key}" || { echo "::error::Missing Actions secret: $key. See docs/ios-without-expo-account.md"; exit 1; }
+          done
+  build:
+    needs: preflight
+    runs-on: macos-26
+    timeout-minutes: 75
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      BUILD_MODE: ${{ inputs.mode || 'unsigned' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Select Xcode with Swift 6.2 or newer
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+      - name: Install dependencies
+        run: |
+          if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
+          xcodebuild -version
+          pod --version
+      - name: Generate native project and archive
+        env:
+          IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
+          IOS_APPSTORE_PROFILE_BASE64: ${{ secrets.IOS_APPSTORE_PROFILE_BASE64 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
+        run: bash scripts/build-ios.sh "$BUILD_MODE"
+      - name: Upload signed iPhone build
+        if: success() && env.BUILD_MODE == 'adhoc'
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-check-ios-adhoc-${{ github.run_number }}
+          path: build/ipa/*.ipa
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload build diagnostics
+        continue-on-error: true
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-diagnostics-${{ github.run_number }}
+          path: |
+            build/*.log
+            build/ArchiveResult.xcresult
+            package-lock.json
+            ios/Podfile.lock
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Report result accurately
+        if: success()
+        run: |
+          if [[ "$BUILD_MODE" == testflight ]]; then
+            echo "Build ${{ github.run_number }} uploaded to App Store Connect. It shows up in TestFlight after Apple finishes processing (usually 5–30 minutes)." >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "$BUILD_MODE" == adhoc ]]; then
+            echo 'Signed Ad Hoc IPA created; device installation still needs verification.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Unsigned iOS Release compilation passed. This is NOT an installable iPhone build.' >> "$GITHUB_STEP_SUMMARY"
+          fi
