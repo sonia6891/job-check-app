@@ -6,7 +6,7 @@ import { router, useFocusEffect } from 'expo-router';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { api } from '@/src/lib/api';
 import { ensureGuestSession, supabase } from '@/src/lib/supabase';
-import { recognizeTextFromLocalImage, type OcrResult } from '@/src/lib/ocr';
+import { recognizeTextFromImages, type OcrResult } from '@/src/lib/ocr';
 import { prefs } from '@/src/lib/prefs';
 import { SetupBanner } from '@/src/components/SetupBanner';
 import { JobTextReview } from '@/src/components/JobTextReview';
@@ -213,16 +213,20 @@ export default function HomeScreen() {
       showMessage('需要照片權限', '請允許照片權限後再選擇職缺截圖。');
       return null;
     }
+    // 長職缺可以往下滑連截幾張，一次選起來，依點選順序接成一份。
     return ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      quality: 1
+      quality: 1,
+      allowsMultipleSelection: true,
+      orderedSelection: true,
+      selectionLimit: 6
     });
   }
 
   function chooseImageSource() {
     Alert.alert('加入職缺截圖', '你要從哪裡取得圖片？', [
       { text: '拍照', onPress: () => handleImage('camera') },
-      { text: '從相簿選擇', onPress: () => handleImage('library') },
+      { text: '從相簿選擇（可一次選多張）', onPress: () => handleImage('library') },
       { text: '取消', style: 'cancel' }
     ]);
   }
@@ -235,7 +239,8 @@ export default function HomeScreen() {
     setBusy(true);
     try {
       // OCR is local; no upload or analysis row until the user confirms the text.
-      const result = await recognizeTextFromLocalImage(asset.uri);
+      // 多張截圖只上傳第一張當作來源紀錄，分析用的是接起來的全部文字。
+      const result = await recognizeTextFromImages(picked.assets.map(a => ({ uri: a.uri, width: a.width, height: a.height })));
       setPendingOcr({ assetUri: asset.uri, mimeType: asset.mimeType ?? 'image/jpeg', filename: asset.fileName ?? null, result });
       setOcrText(result.text);
     } catch (e: any) {
@@ -443,6 +448,7 @@ export default function HomeScreen() {
 
       <JobTextReview
         visible={Boolean(pendingOcr) || reviewText}
+        pageCount={pendingOcr?.result.pageCount}
         mode={pendingOcr ? 'ocr' : 'text'}
         text={pendingOcr ? ocrText : text}
         sourceUrl={pendingOcr ? null : sourceUrl}

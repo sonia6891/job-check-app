@@ -8,6 +8,8 @@ import { shiftSpans } from '@/src/lib/workHours';
 
 type Props = {
   visible: boolean; mode: 'text' | 'ocr'; text: string; sourceUrl?: string | null; busy: boolean;
+  /** 一次選了幾張截圖（大於 1 時提醒使用者看一下接起來的順序）。 */
+  pageCount?: number;
   onChangeText: (text: string) => void; onCancel: () => void; onConfirm: () => void;
 };
 
@@ -15,7 +17,7 @@ type Props = {
  * 送出前的核對視窗（Figma「核對職缺文字」）：從下方滑出，內容可以直接改。
  * 「系統讀到的資訊」只用本機規則判斷有沒有寫薪資和上班時間，不代表整份解析結果。
  */
-export function JobTextReview({ visible, mode, text, sourceUrl, busy, onChangeText, onCancel, onConfirm }: Props) {
+export function JobTextReview({ visible, mode, text, sourceUrl, busy, pageCount, onChangeText, onCancel, onConfirm }: Props) {
   const insets = useSafeAreaInsets();
   const length = text.trim().length;
   const hasSalary = Boolean(parseSalaryText(text));
@@ -30,7 +32,9 @@ export function JobTextReview({ visible, mode, text, sourceUrl, busy, onChangeTe
             <ScrollView contentContainerStyle={{ gap: space.lg }} keyboardShouldPersistTaps="handled">
               <View style={{ gap: 4 }}>
                 <T variant="heading" accessibilityRole="header">{mode === 'ocr' ? '辨識好了，先核對一下' : '送出前，先看一下內容'}</T>
-                <T variant="caption" muted>{mode === 'ocr' ? '文字是在手機上辨識的，確認後才會上傳。看到錯字或缺的地方可以直接改。' : '這是你貼上的職缺，看到錯字或缺的地方可以直接改。'}</T>
+                <T variant="caption" muted>{mode === 'ocr'
+                  ? `${pageCount && pageCount > 1 ? `已把 ${pageCount} 張截圖接在一起，重複的部分去掉了。` : ''}文字是在手機上辨識的，確認後才會上傳。看到錯字或缺的地方可以直接改。`
+                  : '這是你貼上的職缺，看到錯字或缺的地方可以直接改。'}</T>
               </View>
               {sourceUrl ? (
                 <View style={styles.source}>
