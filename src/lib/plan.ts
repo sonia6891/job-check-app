@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/src/lib/supabase';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { billingConfigured } from '@/src/lib/billing';
@@ -39,9 +39,10 @@ export function usePlan() {
   const [profile, setProfile] = useState<PlanProfile | null>(null);
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [error, setError] = useState(false);
+  const currentUserId = useRef(userId);
 
-  // 換帳號時不能沿用上一個帳號的方案。
-  useEffect(() => { setProfile(null); setError(false); }, [userId]);
+  // 換帳號時不能沿用上一個帳號的方案；還在飛的舊請求回來也不能寫進來。
+  useEffect(() => { currentUserId.current = userId; setProfile(null); setError(false); }, [userId]);
 
   // 回傳最新的方案，呼叫端不用等畫面更新就能判斷（例如購買後等開通）；讀取失敗回傳 null。
   const refresh = useCallback(async () => {
@@ -50,14 +51,13 @@ export function usePlan() {
       const { data, error: queryError } = await supabase.from('profiles').select('plan,plan_expire_at').eq('id', userId).maybeSingle();
       if (queryError) throw queryError;
       const next = (data as PlanProfile | null) ?? null;
-      setProfile(next);
-      setError(false);
+      if (currentUserId.current === userId) { setProfile(next); setError(false); }
       return next;
     } catch {
-      setError(true);
+      if (currentUserId.current === userId) setError(true);
       return null;
     } finally {
-      setLoadedFor(userId);
+      if (currentUserId.current === userId) setLoadedFor(userId);
     }
   }, [userId]);
 

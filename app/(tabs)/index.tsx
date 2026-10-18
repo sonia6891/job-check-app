@@ -14,7 +14,7 @@ import type { JobCardData } from '@/src/components/JobCard';
 import { colors, onBrand, radius, shadow, space } from '@/src/theme/tokens';
 import { Button, FocusStatusBar, IconCircle, Num, Screen, SectionTitle, T } from '@/src/ui';
 import { showMessage } from '@/src/lib/uiAlerts';
-import { freeMonthlyLimit, paymentsEnabled, usePlan } from '@/src/lib/plan';
+import { paymentsEnabled, usePlan } from '@/src/lib/plan';
 import { relativeDay } from '@/src/lib/myJobs';
 
 type PendingOcr = {
@@ -24,7 +24,8 @@ type PendingOcr = {
   result: OcrResult;
 };
 type InputMode = 'text' | 'url' | 'image';
-type Quota = { kind: 'loading' } | { kind: 'error' } | { kind: 'count'; used: number };
+// 上限由後端決定（job_analysis_quota_status），免費／Pro、開放購買前後畫面都不用自己猜。
+type Quota = { kind: 'loading' } | { kind: 'error' } | { kind: 'count'; used: number; limit: number; plan: string };
 type RecentJob = JobCardData & { created_at?: string | null };
 
 /** 小提醒輪流出現，一天換一則。內容都是勞動法規的基本常識。 */
@@ -116,9 +117,9 @@ export default function HomeScreen() {
       const [recentResult, usageResult] = await Promise.all([
         supabase.from('job_posts')
           .select('id,job_title,display_company_name,salary_raw,location_raw,created_at')
-          .eq('user_id', userId).order('created_at', { ascending: false }).limit(4),
-        supabase.from('usage_events')
-          .select('units,period_start').eq('user_id', userId).eq('feature', 'job_analysis')
+          // 還沒解析完的上傳列（中途失敗留下的）沒有內容，不列出來。
+          .eq('user_id', userId).neq('parse_status', 'uploaded').order('created_at', { ascending: false }).limit(4),
+        supabase.rpc('job_analysis_quota_status')
       ]);
       if (recentResult.error) {
         setRecentError(recentResult.error.message);
@@ -126,15 +127,11 @@ export default function HomeScreen() {
       } else {
         setRecent((recentResult.data ?? []) as RecentJob[]);
       }
-      if (usageResult.error) {
+      const status = usageResult.data as { used?: number; limit?: number; plan?: string } | null;
+      if (usageResult.error || typeof status?.used !== 'number' || typeof status?.limit !== 'number') {
         setQuota({ kind: 'error' });
       } else {
-        const now = new Date();
-        const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-        const used = (usageResult.data ?? [])
-          .filter(x => x.period_start === month)
-          .reduce((total, item) => total + (item.units || 0), 0);
-        setQuota({ kind: 'count', used });
+        setQuota({ kind: 'count', used: status.used, limit: status.limit, plan: status.plan ?? 'free' });
       }
     } catch (error: any) {
       setRecentError(error?.message || '目前無法載入最近的職缺。');
@@ -267,10 +264,12 @@ export default function HomeScreen() {
       return;
     }
     setBusy(true);
+    // prepareUpload 先建了職缺列；之後上傳或解析失敗時要刪掉，不然「我的職缺」會多一張空白卡。
+    let prep: Awaited<ReturnType<typeof api.prepareUpload>> | null = null;
     try {
       const auth = await ensureGuestSession();
       if (!auth.ok) throw new Error(auth.reason);
-      const prep = await api.prepareUpload(pendingOcr.mimeType, pendingOcr.filename, await prefs.getKeepOriginal());
+      prep = await api.prepareUpload(pendingOcr.mimeType, pendingOcr.filename, await prefs.getKeepOriginal());
       const response = await fetch(pendingOcr.assetUri);
       const bytes = await response.arrayBuffer();
       const uploaded = await supabase.storage.from(prep.bucket).upload(prep.storage_path, bytes, {
@@ -282,10 +281,12 @@ export default function HomeScreen() {
         language: pendingOcr.result.language, confidence: pendingOcr.result.confidence
       });
       if (!parsed.job_id) throw new Error('job_id_missing');
+      prep = null;
       setPendingOcr(null);
       setOcrText('');
       router.push(`/analysis/${parsed.job_id}`);
     } catch (e: any) {
+      if (prep) void supabase.from('job_posts').delete().eq('id', prep.job_post_id).then(() => undefined, () => undefined);
       showMessage('無法開始分析', e?.message ?? '請稍後再試，校正內容會保留。');
     } finally {
       setBusy(false);
@@ -297,7 +298,7 @@ export default function HomeScreen() {
     setOcrText('');
   }
 
-  const remaining = quota.kind === 'count' ? Math.max(0, freeMonthlyLimit - quota.used) : 0;
+  const remaining = quota.kind === 'count' ? Math.max(0, quota.limit - quota.used) : 0;
   const now = new Date();
   const tip = TIPS[Math.floor(now.getTime() / 86400000) % TIPS.length];
   const urlMode = mode === 'url';
@@ -400,9 +401,9 @@ export default function HomeScreen() {
             </View>
           ) : (
             <Pressable accessibilityRole={paymentsEnabled ? 'button' : undefined} style={styles.quota} disabled={!paymentsEnabled} onPress={() => router.push('/plans')}
-              accessibilityLabel={quota.kind === 'count' ? `免費，這個月還可以檢查 ${remaining} 次，每月 ${freeMonthlyLimit} 次` : '本月檢查次數'}>
+              accessibilityLabel={quota.kind === 'count' ? `免費，這個月還可以檢查 ${remaining} 次，每月 ${quota.limit} 次` : '本月檢查次數'}>
               {quota.kind === 'count' ? (
-                <View style={styles.quotaTrack}><View style={[styles.quotaFill, { width: `${(remaining / freeMonthlyLimit) * 100}%` }]} /></View>
+                <View style={styles.quotaTrack}><View style={[styles.quotaFill, { width: `${(remaining / quota.limit) * 100}%` }]} /></View>
               ) : quota.kind === 'loading' ? <ActivityIndicator size="small" color="#FFFFFF" /> : null}
               <T variant="caption" color={onBrand.muted}>
                 {quota.kind === 'count'

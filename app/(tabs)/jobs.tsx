@@ -44,7 +44,8 @@ export default function JobsScreen() {
         const [jobRes, trackRes] = await Promise.all([
           supabase.from('job_posts')
             .select('id,job_title,display_company_name,salary_raw,location_raw,created_at')
-            .eq('user_id', user.id).order('created_at', { ascending: false }),
+            // 還沒解析完的上傳列（中途失敗留下的）沒有內容，不列出來。
+            .eq('user_id', user.id).neq('parse_status', 'uploaded').order('created_at', { ascending: false }),
           // 收藏與求職進度共用 saved_jobs；收藏篩選只看 favorite === true 的列。
           supabase.from('saved_jobs')
             .select('job_post_id,status,favorite,updated_at').eq('user_id', user.id)

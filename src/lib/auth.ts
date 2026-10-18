@@ -99,7 +99,9 @@ async function createSessionFromUrl(url: string) {
   throw new Error('登入完成，但沒有收到可建立 Session 的憑證。');
 }
 
-async function issueGuestTransferToken(): Promise<{ token: string; expiresAt: string | null } | null> {
+type GuestTransfer = { token: string; expiresAt: string | null; guestHadPro: boolean };
+
+async function issueGuestTransferToken(): Promise<GuestTransfer | null> {
   const { data, error } = await supabase.auth.getUser();
   if (error) throw new Error('登入前無法確認訪客身分，請稍後重試。');
   if (!data.user?.is_anonymous) return null;
@@ -108,10 +110,13 @@ async function issueGuestTransferToken(): Promise<{ token: string; expiresAt: st
   if (result.status !== 'created' || !result.transfer_token) {
     throw new Error('無法準備訪客資料轉移，已暫停登入以避免遺失分析紀錄。');
   }
-  return { token: result.transfer_token, expiresAt: result.expires_at || null };
+  // 記下訪客身分本身有沒有買 Pro：只有這種情況登入後才把收據搬到新帳號。
+  // 不然同一支手機登入另一個帳號時，會把前一個帳號的訂閱也搬走。
+  const guestHadPro = await billing.getStatus().then(s => s.isPro).catch(() => false);
+  return { token: result.transfer_token, expiresAt: result.expires_at || null, guestHadPro };
 }
 
-async function finishPermanentSignIn(transfer: { token: string; expiresAt: string | null } | null) {
+async function finishPermanentSignIn(transfer: GuestTransfer | null) {
   const { data } = await supabase.auth.getSession();
   const session = data.session;
   if (!session) throw new Error('登入後找不到 Session。');
@@ -145,8 +150,8 @@ async function finishPermanentSignIn(transfer: { token: string; expiresAt: strin
   // 訂閱狀態刷新失敗不能讓成功的登入看起來像失敗；之後可在方案頁重試。
   try {
     await billing.identify(session.user.id);
-    // 訪客身分換成正式帳號：訪客時買的訂閱要跟著過來，不然續訂會記在已經不用的訪客身分。
-    if (transfer) await billing.syncPurchases();
+    // 訪客時買的訂閱要跟著過來，不然續訂會記在已經不用的訪客身分。沒買過就不同步，免得搬走別的帳號的訂閱。
+    if (transfer?.guestHadPro) await billing.syncPurchases();
   } catch { /* RevenueCat 可稍後重試；方案頁也有「恢復購買」 */ }
   return session;
 }

@@ -62,6 +62,10 @@ export const api = {
   deleteAccount: () =>
     invoke<{ status: 'deleted' }>('delete-account', { confirm: 'DELETE' }),
 
+  // 購買後等不到 webhook 開通時，請後端直接向 RevenueCat 查這個帳號的訂閱並寫進 profiles。
+  syncEntitlement: () =>
+    invoke<{ status: string; found: boolean; active: boolean; profile: { plan: string | null; plan_expire_at: string | null } | null }>('sync-entitlement', {}),
+
   appHealth: () =>
     invoke<any>('app-health', {}),
 

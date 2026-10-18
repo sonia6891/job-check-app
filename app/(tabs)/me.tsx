@@ -28,7 +28,10 @@ function providerLabel(provider?: string) {
 export default function MeScreen() {
   const { user, loading: authLoading, setupIssue } = useAuth();
   const [profile, setProfile] = useState<any>(null);
-  const [used, setUsed] = useState(0);
+  // 次數與上限都由後端的 job_analysis_quota_status 決定，畫面不自己算。
+  const [usage, setUsage] = useState<{ used: number; limit: number } | null>(null);
+  const used = usage?.used ?? 0;
+  const limit = usage?.limit ?? freeMonthlyLimit;
   const plan = usePlan();
   const [busy, setBusy] = useState<string | null>(null);
   const [appleAvailable, setAppleAvailable] = useState(false);
@@ -46,14 +49,13 @@ export default function MeScreen() {
 
   const reload = useCallback(async () => {
     if (!user) return;
-    const [{ data: p }, { data: u }] = await Promise.all([
+    const [{ data: p }, { data: status }] = await Promise.all([
       supabase.from('profiles').select('display_name').eq('id', user.id).single(),
-      supabase.from('usage_events').select('units,period_start').eq('feature', 'job_analysis').eq('user_id', user.id)
+      supabase.rpc('job_analysis_quota_status')
     ]);
     setProfile(p);
-    const now = new Date();
-    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-    setUsed((u ?? []).filter((x: any) => x.period_start === month).reduce((s: number, x: any) => s + (x.units || 0), 0));
+    const s = status as { used?: number; limit?: number } | null;
+    if (typeof s?.used === 'number' && typeof s?.limit === 'number') setUsage({ used: s.used, limit: s.limit });
   }, [user?.id]);
 
   const refreshPlan = plan.refresh;
@@ -143,10 +145,10 @@ export default function MeScreen() {
             <View style={styles.usageHead}>
               <T variant="bodyStrong" style={{ flex: 1 }}>{paymentsEnabled ? '這個月用了（免費版）' : '這個月用了（全部免費）'}</T>
               <Num size={22} color={colors.primary}>{used}</Num>
-              <T variant="captionStrong" muted> / {freeMonthlyLimit} 次</T>
+              <T variant="captionStrong" muted> / {limit} 次</T>
             </View>
-            <ProgressBar value={Math.min(1, used / freeMonthlyLimit)} color={colors.primary} />
-            <T variant="small" muted>每月 1 日重新計算。同一份職缺重新檢查不會重複算。</T>
+            <ProgressBar value={Math.min(1, used / limit)} color={colors.primary} />
+            <T variant="small" muted>每月 1 日重新計算；開始檢查時就算一次。同一份職缺當月重新檢查不會重複算。</T>
           </>
         )}
         {paymentsEnabled ? (

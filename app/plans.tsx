@@ -8,7 +8,8 @@ import { billing, billingConfigured } from '@/src/lib/billing';
 import { isProActive, usePlan } from '@/src/lib/plan';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { FREE_MONTHLY_LIMIT, PRO_MONTHLY_LIMIT } from '@/src/lib/usage';
-import { showMessage } from '@/src/lib/uiAlerts';
+import { confirmAction, showMessage } from '@/src/lib/uiAlerts';
+import { api } from '@/src/lib/api';
 import { colors, gradient, onBrand, radius, space } from '@/src/theme/tokens';
 import { Button, Notice, Screen, Surface, T } from '@/src/ui';
 
@@ -54,7 +55,7 @@ export default function PlansScreen() {
   }, [user]);
 
   const pkgFor = (type: 'MONTHLY' | 'ANNUAL') => packages.find(p => p.packageType === type);
-  const priceFor = (type: 'MONTHLY' | 'ANNUAL') => pkgFor(type)?.product.priceString ?? `NT${FALLBACK_PRICES[type]}`;
+  const priceFor = (type: 'MONTHLY' | 'ANNUAL') => pkgFor(type)?.product.priceString ?? `NT$${FALLBACK_PRICES[type]}`;
 
   // 年費說明照商店實際價格算，價格改了或在其他地區也不會寫錯。
   function annualNote() {
@@ -63,15 +64,23 @@ export default function PlansScreen() {
     const fromStore = Boolean(monthly && annual);
     const m = fromStore ? monthly!.price : FALLBACK_PRICES.MONTHLY;
     const a = fromStore ? annual!.price : FALLBACK_PRICES.ANNUAL;
-    const perMonth = fromStore ? annual!.pricePerMonthString : `NT${Math.round(a / 12)}`;
+    const perMonth = fromStore ? annual!.pricePerMonthString : `NT$${Math.round(a / 12)}`;
     const save = m > 0 ? Math.round((1 - a / (m * 12)) * 100) : 0;
     return [perMonth ? `平均每月約 ${perMonth}` : '一次付一年', save > 0 ? `比月繳省約 ${save}%` : ''].filter(Boolean).join('，');
   }
 
-  // 購買後由 RevenueCat 通知後端開通，通常幾秒內完成；多等一下再讀一次方案。
+  // 購買後由 RevenueCat 通知後端開通，通常幾秒內完成；等不到就請後端直接向 RevenueCat 查一次
+  //（webhook 漏送、或恢復購買在 RevenueCat 端沒有新事件時的補救），之後再繼續等。
   const waitForPro = useCallback(async () => {
     for (let i = 0; i < 6; i++) {
       if (isProActive(await plan.refresh())) return true;
+      if (i === 1) {
+        try {
+          if (isProActive((await api.syncEntitlement()).profile)) { await plan.refresh(); return true; }
+        } catch {
+          // 後端還沒設定 RevenueCat 金鑰或暫時失敗，繼續等 webhook。
+        }
+      }
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
     return false;
@@ -100,7 +109,16 @@ export default function PlansScreen() {
     }
   }
 
-  async function restore() {
+  function restore() {
+    // 訪客按恢復購買，會把這個 Apple ID 的訂閱移到目前的訪客身分；在別的帳號買的人應該先登入那個帳號。
+    if (user?.is_anonymous) {
+      confirmAction('先登入帳號再恢復？', '現在是訪客身分。恢復購買會把這個 Apple ID 的 Pro 訂閱移到目前的訪客身分。如果你是在別的帳號買的，請先到「我的」登入那個帳號再恢復。\n\n確定要在訪客身分恢復嗎？', () => { void runRestore(); });
+      return;
+    }
+    void runRestore();
+  }
+
+  async function runRestore() {
     setBusy('restore');
     try {
       const result = await billing.restore();

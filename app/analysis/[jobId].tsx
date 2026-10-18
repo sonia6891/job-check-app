@@ -244,11 +244,11 @@ export default function AnalysisScreen() {
         <View style={{ gap: space.md }}>
           {quotaExceeded.pro ? (
             <Notice tone="info" title={`這個月的 ${quotaExceeded.limit} 次檢查用完了`}>
-              {`為了防止濫用，Pro 每月最多檢查 ${quotaExceeded.limit} 份職缺，下個月 1 日恢復。同一份職缺重新檢查不會重複算，這份職缺已經存在「我的職缺」。`}
+              {`為了防止濫用，Pro 每月最多檢查 ${quotaExceeded.limit} 份職缺，下個月 1 日恢復。同一份職缺當月重新檢查不會重複算，這份職缺已經存在「我的職缺」。`}
             </Notice>
           ) : (
             <Notice tone="info" title={`這個月的 ${quotaExceeded.limit} 次免費檢查用完了`}>
-              {`${paymentsEnabled ? '升級 Pro 就能繼續檢查；也可以' : '可以'}等下個月 1 日恢復。同一份職缺重新檢查不會重複算，這份職缺已經存在「我的職缺」。`}
+              {`${paymentsEnabled ? '升級 Pro 就能繼續檢查；也可以' : '可以'}等下個月 1 日恢復。同一份職缺當月重新檢查不會重複算，這份職缺已經存在「我的職缺」。`}
             </Notice>
           )}
           {paymentsEnabled && !quotaExceeded.pro ? <Button icon="sparkles" label="升級 Pro・不限次數" onPress={() => router.push('/plans')} /> : null}

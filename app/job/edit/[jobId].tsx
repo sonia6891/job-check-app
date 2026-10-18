@@ -96,7 +96,7 @@ export default function JobEditScreen() {
 
   return (
     <Screen>
-      <Notice tone="info">改公司名稱會重新查紀錄（用 1 次）；改其他欄位不扣次數，報告會馬上更新。原始職缺內容仍保留，方便核對。</Notice>
+      <Notice tone="info">改公司名稱會重新查公司和違規紀錄（同一份職缺同一個月內重查，不會重複算次數）；改其他欄位報告會馬上更新。原始職缺內容仍保留，方便核對。</Notice>
       {loading ? [0, 1].map(i => <View key={i} style={styles.skeleton} />) : null}
       {loadError ? (
         <Notice tone="caution" title="讀不到這份職缺">
