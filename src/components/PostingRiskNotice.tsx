@@ -3,6 +3,7 @@ import { Linking, StyleSheet, View } from 'react-native';
 import { colors, shadow } from '@/src/theme/tokens';
 import { Button, IconCircle, T } from '@/src/ui';
 import type { PostingRiskHint } from '@/src/lib/postingRisks';
+import { showMessage } from '@/src/lib/uiAlerts';
 
 const copy: Record<PostingRiskHint['kind'], { title: string; body: string }> = {
   account_handover: {
@@ -24,7 +25,8 @@ const copy: Record<PostingRiskHint['kind'], { title: string; body: string }> = {
 };
 
 function call165() {
-  Linking.openURL('tel:165').catch(() => undefined);
+  // 沒有電話功能的裝置（例如 iPad）打不出去，告訴使用者改用電話撥。
+  Linking.openURL('tel:165').catch(() => showMessage('無法撥號', '請用電話直接撥打 165。'));
 }
 
 /**
