@@ -12,6 +12,7 @@ import { officialRecordState } from '@/src/lib/officialRecordState';
 import { WorkHoursNotice } from '@/src/components/WorkHoursNotice';
 import { PostingRiskNotice } from '@/src/components/PostingRiskNotice';
 import { checkWorkHours } from '@/src/lib/workHours';
+import { hoursWithoutDaysOff } from '@/src/lib/hoursLabel';
 import { buildReportShareText } from '@/src/lib/reportShare';
 import { buildChecklist, friendlyVerdict, missingLabel, type CheckItem, type CheckKey } from '@/src/lib/reportSummary';
 import { monthlyDaysOff, salaryScale, shiftBreakdown } from '@/src/lib/reportVisuals';
@@ -493,7 +494,7 @@ export default function ReportScreen() {
         <T variant="body" color={colors.textBody}>{[report.job.title || '未命名職缺', report.job.display_company_name || '公司待確認'].join('・')}</T>
         {report.job.location || report.job.work_hours || employment || daysOffSource ? (
           <View style={styles.chipRow}>
-            {[report.job.location, report.job.work_hours, employment, daysOffSource].filter((c): c is string => !!c).map(c => <Chip key={c} tone="white" label={c} />)}
+            {[report.job.location, hoursWithoutDaysOff(report.job.work_hours, daysOffSource), employment, daysOffSource].filter((c): c is string => !!c).map(c => <Chip key={c} tone="white" label={c} />)}
           </View>
         ) : null}
       </View>

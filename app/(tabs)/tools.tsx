@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, onBrand, radius, shadow, space } from '@/src/theme/tokens';
 import { FocusStatusBar, IconCircle, Num, Screen, SectionTitle, T, type IconName } from '@/src/ui';
 import { showMessage } from '@/src/lib/uiAlerts';
+import { paymentsEnabled } from '@/src/lib/plan';
 
 const hotlines: Array<{ number: string; title: string; detail: string; bg: string; fg: string }> = [
   { number: '165', title: '反詐騙專線', detail: '被要求先付錢、交帳戶', bg: colors.dangerSoft, fg: colors.danger },
@@ -90,7 +91,7 @@ export default function ToolsScreen() {
           </View>
         ))}
       </View>
-      <T variant="small" muted style={{ paddingHorizontal: space.xs }}>以上是一般原則，實際情況以勞動部公告與勞動契約為準。所有功能都免費。</T>
+      <T variant="small" muted style={{ paddingHorizontal: space.xs }}>{`以上是一般原則，實際情況以勞動部公告與勞動契約為準。${paymentsEnabled ? '基本工資檢查、求職進度和求助專線都免費。' : '所有功能都免費。'}`}</T>
     </Screen>
   );
 }
