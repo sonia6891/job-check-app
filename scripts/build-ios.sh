@@ -26,7 +26,8 @@ node <<'JS'
 const fs = require('fs');
 const env = require('./eas.json').build.base.env;
 // RevenueCat 的公開 SDK 金鑰有填，App 才會開啟付費功能（src/lib/plan.ts 的 paymentsEnabled）。
-const allowed = ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY', 'EXPO_PUBLIC_REVENUECAT_IOS_API_KEY', 'EXPO_PUBLIC_REVENUECAT_PRO_ENTITLEMENT_ID'];
+const allowed = ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY', 'EXPO_PUBLIC_REVENUECAT_IOS_API_KEY', 'EXPO_PUBLIC_REVENUECAT_PRO_ENTITLEMENT_ID',
+  'EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID', 'EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID', 'EXPO_PUBLIC_PRIVACY_POLICY_URL'];
 fs.writeFileSync('.env.local', allowed.map(k => `${k}=${JSON.stringify(env[k] || '')}`).join('\n') + '\n');
 JS
 # Every TestFlight upload needs a new, larger CFBundleVersion; the workflow run number always grows.

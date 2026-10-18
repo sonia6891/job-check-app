@@ -93,8 +93,11 @@ export default function HomeScreen() {
   useFocusEffect(useCallback(() => {
     prefs.getKeepOriginal().then(setKeepOriginal);
     void init();
-    void plan.refresh();
   }, []));
+
+  // 分開寫：plan.refresh 會隨登入帳號更新，不能被上面只在第一次建立的 callback 鎖住舊帳號。
+  const refreshPlan = plan.refresh;
+  useFocusEffect(useCallback(() => { void refreshPlan(); }, [refreshPlan]));
 
   async function init() {
     setRecentError(null);

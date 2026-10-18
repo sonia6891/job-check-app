@@ -56,15 +56,16 @@ export default function MeScreen() {
     setUsed((u ?? []).filter((x: any) => x.period_start === month).reduce((s: number, x: any) => s + (x.units || 0), 0));
   }, [user?.id]);
 
+  const refreshPlan = plan.refresh;
   useFocusEffect(useCallback(() => {
     void reload();
-    void plan.refresh();
+    void refreshPlan();
     void prefs.getKeepOriginal().then(setKeepOriginal);
     // Recover a short-lived native encrypted transfer credential after an App restart.
     void authActions.restoreGuestTransfer().then(setGuestTransfer).catch(() => {
       setGuestTransfer(authActions.getGuestTransferNotice());
     });
-  }, [reload]));
+  }, [reload, refreshPlan]));
 
   useEffect(() => {
     if (Platform.OS === 'ios') {
@@ -77,7 +78,8 @@ export default function MeScreen() {
   function confirmDeleteAccount() {
     confirmAction(
       '刪除帳號？',
-      '會永久刪除這個帳號的所有職缺、體檢報告、收藏、求職進度與上傳的原圖，無法復原。',
+      '會永久刪除這個帳號的所有職缺、體檢報告、收藏、求職進度與上傳的原圖，無法復原。'
+        + (paymentsEnabled ? '\n\n刪除帳號不會自動取消 Apple 的 Pro 訂閱，有訂閱的話請先到 App Store 取消，才不會繼續扣款。' : ''),
       () => { void runBusy('delete', authActions.deleteAccount, '帳號與資料已刪除，現在是新的訪客身分。'); },
       true
     );

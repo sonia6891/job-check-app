@@ -7,7 +7,7 @@ import type { PurchasesPackage } from 'react-native-purchases';
 import { billing, billingConfigured } from '@/src/lib/billing';
 import { isProActive, usePlan } from '@/src/lib/plan';
 import { useAuth } from '@/src/auth/AuthProvider';
-import { FREE_MONTHLY_LIMIT } from '@/src/lib/usage';
+import { FREE_MONTHLY_LIMIT, PRO_MONTHLY_LIMIT } from '@/src/lib/usage';
 import { showMessage } from '@/src/lib/uiAlerts';
 import { colors, gradient, onBrand, radius, space } from '@/src/theme/tokens';
 import { Button, Notice, Screen, Surface, T } from '@/src/ui';
@@ -15,15 +15,17 @@ import { Button, Notice, Screen, Surface, T } from '@/src/ui';
 type IconName = keyof typeof Ionicons.glyphMap;
 
 const BENEFITS: Array<{ icon: IconName; title: string; body: string }> = [
-  { icon: 'infinite', title: '不限次數檢查', body: `免費版每月 ${FREE_MONTHLY_LIMIT} 次，Pro 想查幾份就查幾份。` },
+  { icon: 'infinite', title: '不限次數檢查', body: `免費版每月 ${FREE_MONTHLY_LIMIT} 次，Pro 想查幾份就查幾份。＊` },
   { icon: 'git-compare', title: '並排比較 2～5 份職缺', body: '薪資、工時、休假和公司紀錄排在一起，一眼看出哪份比較好。' },
   { icon: 'heart', title: '支持我們持續更新', body: '政府資料和詐騙手法一直在變，你的訂閱讓我們能一直查下去。' }
 ];
 
 // 商店價格沒載入時（例如還沒設定購買功能）顯示的定價。
-const FALLBACK_PRICES = { MONTHLY: 'NT$60', ANNUAL: 'NT$590' } as const;
+const FALLBACK_PRICES = { MONTHLY: 60, ANNUAL: 590 } as const;
 const SUBSCRIPTIONS_URL = 'https://apps.apple.com/account/subscriptions';
 const APPLE_EULA = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+// 公開的隱私權政策網址（上架前要有）；還沒有時連到 App 內的「隱私與資料」說明。
+const PRIVACY_POLICY_URL = process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL ?? '';
 
 /** Pro 方案：月費 NT$60、年費 NT$590（RevenueCat）。詐騙警訊與違規紀錄對所有人都免費。 */
 export default function PlansScreen() {
@@ -52,7 +54,19 @@ export default function PlansScreen() {
   }, [user]);
 
   const pkgFor = (type: 'MONTHLY' | 'ANNUAL') => packages.find(p => p.packageType === type);
-  const priceFor = (type: 'MONTHLY' | 'ANNUAL') => pkgFor(type)?.product.priceString ?? FALLBACK_PRICES[type];
+  const priceFor = (type: 'MONTHLY' | 'ANNUAL') => pkgFor(type)?.product.priceString ?? `NT${FALLBACK_PRICES[type]}`;
+
+  // 年費說明照商店實際價格算，價格改了或在其他地區也不會寫錯。
+  function annualNote() {
+    const monthly = pkgFor('MONTHLY')?.product;
+    const annual = pkgFor('ANNUAL')?.product;
+    const fromStore = Boolean(monthly && annual);
+    const m = fromStore ? monthly!.price : FALLBACK_PRICES.MONTHLY;
+    const a = fromStore ? annual!.price : FALLBACK_PRICES.ANNUAL;
+    const perMonth = fromStore ? annual!.pricePerMonthString : `NT${Math.round(a / 12)}`;
+    const save = m > 0 ? Math.round((1 - a / (m * 12)) * 100) : 0;
+    return [perMonth ? `平均每月約 ${perMonth}` : '一次付一年', save > 0 ? `比月繳省約 ${save}%` : ''].filter(Boolean).join('，');
+  }
 
   // 購買後由 RevenueCat 通知後端開通，通常幾秒內完成；多等一下再讀一次方案。
   const waitForPro = useCallback(async () => {
@@ -76,8 +90,8 @@ export default function PlansScreen() {
         showMessage('購買還沒完成', 'App Store 已回應，但訂閱還沒生效。可以稍後按「恢復購買」。');
         return;
       }
-      await waitForPro();
-      showMessage('訂閱成功', '已經開通 Pro，現在可以不限次數檢查職缺了。');
+      if (await waitForPro()) showMessage('訂閱成功', '已經開通 Pro，現在可以不限次數檢查職缺了。');
+      else showMessage('付款完成，正在開通', 'App Store 已完成付款，Pro 通常幾分鐘內就會開通。如果一直沒有開通，請回這裡按「恢復購買」。');
     } catch (e: any) {
       if (e?.userCancelled) return;
       showMessage('購買沒有完成', e?.message ?? '請稍後再試。');
@@ -90,8 +104,9 @@ export default function PlansScreen() {
     setBusy('restore');
     try {
       const result = await billing.restore();
-      if (result.isPro) await waitForPro();
-      showMessage(result.isPro ? '已恢復 Pro' : '沒有找到訂閱', result.isPro ? '你的 Pro 訂閱已經恢復。' : '這個 Apple ID 目前沒有有效的 Pro 訂閱。');
+      if (!result.isPro) showMessage('沒有找到訂閱', '這個 Apple ID 目前沒有有效的 Pro 訂閱。');
+      else if (await waitForPro()) showMessage('已恢復 Pro', '你的 Pro 訂閱已經恢復。');
+      else showMessage('找到訂閱，正在開通', '已經找到你的 Pro 訂閱，通常幾分鐘內就會開通，請稍後再回來看看。');
     } catch (e: any) {
       showMessage('恢復購買沒有完成', e?.message ?? '請稍後再試。');
     } finally {
@@ -150,7 +165,7 @@ export default function PlansScreen() {
                 <Ionicons name={on ? 'radio-button-on' : 'radio-button-off'} size={22} color={on ? colors.primary : colors.placeholder} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <T variant="bodyStrong">{type === 'ANNUAL' ? '年費' : '月費'}</T>
-                  <T variant="caption" muted>{type === 'ANNUAL' ? '平均每月約 NT$49，比月繳省約 18%' : '隨時可以取消'}</T>
+                  <T variant="caption" muted>{type === 'ANNUAL' ? annualNote() : '隨時可以取消'}</T>
                 </View>
                 <T variant="heading">{priceFor(type)}</T>
                 {type === 'ANNUAL' ? <View style={styles.badge}><T variant="label" color="#FFFFFF">最划算</T></View> : null}
@@ -166,11 +181,16 @@ export default function PlansScreen() {
       <Button variant="ghost" label={busy === 'restore' ? '恢復中…' : '恢復購買'} disabled={Boolean(busy) || !billingConfigured} onPress={() => void restore()} />
 
       <T variant="small" muted>
+        ＊為了防止濫用，Pro 每月最多檢查 {PRO_MONTHLY_LIMIT} 份職缺，一般求職用不到這麼多。
+      </T>
+      <T variant="small" muted>
         付款會在確認購買時從你的 Apple ID 帳戶扣款。訂閱會自動續訂，除非在這一期結束前至少 24 小時取消；可以隨時在 iPhone 的「設定 → 你的名字 → 訂閱」管理或取消。
       </T>
       <View style={styles.links}>
         <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(APPLE_EULA)}><T variant="captionStrong" color={colors.primary}>使用條款</T></Pressable>
-        <Pressable accessibilityRole="link" onPress={() => router.push('/privacy')}><T variant="captionStrong" color={colors.primary}>隱私權政策</T></Pressable>
+        <Pressable accessibilityRole="link" onPress={() => (PRIVACY_POLICY_URL ? void Linking.openURL(PRIVACY_POLICY_URL) : router.push('/privacy'))}>
+          <T variant="captionStrong" color={colors.primary}>{PRIVACY_POLICY_URL ? '隱私權政策' : '隱私與資料'}</T>
+        </Pressable>
       </View>
     </Screen>
   );

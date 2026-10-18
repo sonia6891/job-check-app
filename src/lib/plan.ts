@@ -13,6 +13,15 @@ export const freeMonthlyLimit = paymentsEnabled ? FREE_MONTHLY_LIMIT : LEGACY_MO
 
 export type PlanProfile = { plan: string | null; plan_expire_at: string | null };
 
+export type QuotaHit = { pro: boolean; limit: number };
+
+/** 後端回 analysis_quota_exceeded 時附的 quota（consume_job_analysis_quota 的結果），次數上限以後端為準。 */
+export function readQuotaHit(payload: unknown): QuotaHit {
+  const quota = (payload as { quota?: { plan?: unknown; limit?: unknown } } | null | undefined)?.quota;
+  const limit = Number(quota?.limit);
+  return { pro: quota?.plan === 'pro', limit: Number.isFinite(limit) && limit > 0 ? limit : freeMonthlyLimit };
+}
+
 /** 與後端 consume_job_analysis_quota、compare-jobs 相同的判斷：plan 是 pro，且沒有到期日或尚未到期。 */
 export function isProActive(profile: Partial<PlanProfile> | null | undefined) {
   if (profile?.plan !== 'pro') return false;
@@ -20,23 +29,39 @@ export function isProActive(profile: Partial<PlanProfile> | null | undefined) {
   return new Date(profile.plan_expire_at).getTime() > Date.now();
 }
 
-/** 目前帳號的方案（以 Supabase profiles 為準；RevenueCat 購買後由 webhook 更新）。 */
+/**
+ * 目前帳號的方案（以 Supabase profiles 為準；RevenueCat 購買後由 webhook 更新）。
+ * 讀取失敗時保留上次讀到的方案並標 error，不把 Pro 使用者當成免費版；沒有登入時不算載入中。
+ */
 export function usePlan() {
   const { user } = useAuth();
+  const userId = user?.id ?? null;
   const [profile, setProfile] = useState<PlanProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const [error, setError] = useState(false);
 
-  // 回傳最新的方案，呼叫端不用等畫面更新就能判斷（例如購買後等開通）。
+  // 換帳號時不能沿用上一個帳號的方案。
+  useEffect(() => { setProfile(null); setError(false); }, [userId]);
+
+  // 回傳最新的方案，呼叫端不用等畫面更新就能判斷（例如購買後等開通）；讀取失敗回傳 null。
   const refresh = useCallback(async () => {
-    if (!user) return null;
-    const { data } = await supabase.from('profiles').select('plan,plan_expire_at').eq('id', user.id).maybeSingle();
-    const next = (data as PlanProfile | null) ?? null;
-    setProfile(next);
-    setLoading(false);
-    return next;
-  }, [user]);
+    if (!userId) return null;
+    try {
+      const { data, error: queryError } = await supabase.from('profiles').select('plan,plan_expire_at').eq('id', userId).maybeSingle();
+      if (queryError) throw queryError;
+      const next = (data as PlanProfile | null) ?? null;
+      setProfile(next);
+      setError(false);
+      return next;
+    } catch {
+      setError(true);
+      return null;
+    } finally {
+      setLoadedFor(userId);
+    }
+  }, [userId]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  return { profile, pro: isProActive(profile), loading, refresh };
+  return { profile, pro: isProActive(profile), loading: Boolean(userId) && loadedFor !== userId, error, refresh };
 }

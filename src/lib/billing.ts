@@ -81,6 +81,13 @@ export const billing = {
     return { ...result, isPro: isPro(result.customerInfo) };
   },
 
+  // 訪客買了 Pro 再登入正式帳號時，把 App Store 收據移到新帳號（RevenueCat 會送 TRANSFER 給後端），
+  // 之後的續訂才會記在新帳號。沒有購買紀錄時什麼都不做，也不會跳出 Apple ID 登入。
+  async syncPurchases() {
+    if (!configured) return;
+    await Purchases.syncPurchases();
+  },
+
   async restore() {
     if (!configured) throw new Error('購買功能還沒設定好。');
     const customerInfo = await Purchases.restorePurchases();

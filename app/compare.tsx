@@ -73,6 +73,10 @@ export default function CompareScreen() {
     return () => { active = false; requestVersion.current += 1; };
   }, [refreshCount, source]));
 
+  // 從方案頁買完回來要馬上看到 Pro。
+  const refreshPlan = plan.refresh;
+  useFocusEffect(useCallback(() => { void refreshPlan(); }, [refreshPlan]));
+
   function toggle(id: string) {
     if (busy) return;
     requestVersion.current += 1;
@@ -114,7 +118,8 @@ export default function CompareScreen() {
   }
 
   // 並排比較是 Pro 功能；後端 compare-jobs 也會檢查，這裡先說明並引導升級。
-  if (paymentsEnabled && !plan.pro) {
+  // 讀不到方案時不先擋，交給後端判斷，免得 Pro 使用者因為網路問題被鎖住。
+  if (paymentsEnabled && !plan.pro && !plan.error) {
     return (
       <Screen>
         <Empty icon="sparkles" title="並排比較是 Pro 功能"

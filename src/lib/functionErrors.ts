@@ -25,6 +25,10 @@ export async function normalizeFunctionError(error: unknown): Promise<Error & { 
         unauthorized: '登入狀態已失效，請重新登入。',
         quota_check_failed: '暫時無法確認體檢額度，請稍後再試。'
       };
+      const quota = normalized.payload.quota as { plan?: unknown } | undefined;
+      if (code === 'analysis_quota_exceeded' && quota?.plan === 'pro') {
+        descriptions.analysis_quota_exceeded = '這個月的檢查次數已達 Pro 上限，下個月 1 日恢復。';
+      }
       normalized.message = descriptions[code] || original.message || '請稍後再試。';
     }
   }

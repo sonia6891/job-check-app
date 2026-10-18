@@ -143,12 +143,40 @@ async function finishPermanentSignIn(transfer: { token: string; expiresAt: strin
     transferNotice = { status: 'none', message: '' };
   }
   // 訂閱狀態刷新失敗不能讓成功的登入看起來像失敗；之後可在方案頁重試。
-  try { await billing.identify(session.user.id); }
-  catch { /* RevenueCat 可稍後重試 */ }
+  try {
+    await billing.identify(session.user.id);
+    // 訪客身分換成正式帳號：訪客時買的訂閱要跟著過來，不然續訂會記在已經不用的訪客身分。
+    if (transfer) await billing.syncPurchases();
+  } catch { /* RevenueCat 可稍後重試；方案頁也有「恢復購買」 */ }
   return session;
 }
 
 export const LINE_PROVIDER = 'custom:line';
+
+// Google 原生登入需要兩把用戶端 ID：網頁（Supabase 用來驗證）與 iOS（App 用）。都是公開識別碼，不是密鑰。
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
+const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? '';
+const nativeGoogleReady = Platform.OS === 'ios' && Boolean(GOOGLE_WEB_CLIENT_ID && GOOGLE_IOS_CLIENT_ID);
+
+async function signInWithGoogleNative() {
+  const { GoogleSignin, isErrorWithCode, isSuccessResponse, statusCodes } = await import('@react-native-google-signin/google-signin');
+  const transferToken = await issueGuestTransferToken();
+  GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID, iosClientId: GOOGLE_IOS_CLIENT_ID });
+  let response;
+  try {
+    response = await GoogleSignin.signIn();
+  } catch (e) {
+    if (isErrorWithCode(e) && e.code === statusCodes.IN_PROGRESS) throw new Error('Google 登入已經在進行中。');
+    throw e;
+  }
+  if (!isSuccessResponse(response)) throw new Error('已取消 Google 登入。');
+  const idToken = response.data.idToken;
+  if (!idToken) throw new Error('Google 沒有回傳登入憑證。');
+  // iOS 的 Google 登入不能帶自訂 nonce，所以 Supabase 的 Google 設定要開「Skip nonce checks」。
+  const { error } = await supabase.auth.signInWithIdToken({ provider: 'google', token: idToken });
+  if (error) throw error;
+  return finishPermanentSignIn(transferToken);
+}
 
 // 在瀏覽器完成第三方登入，回到 App 後換成正式帳號並搬移訪客資料。
 async function signInWithBrowser(provider: 'google' | typeof LINE_PROVIDER, label: string) {
@@ -197,8 +225,9 @@ export const authActions = {
     }
   },
 
+  // iOS 用 Google 原生登入（跳出 google.com 的帳號清單）；用戶端 ID 還沒設好時改用瀏覽器登入。
   signInWithGoogle() {
-    return signInWithBrowser('google', 'Google');
+    return nativeGoogleReady ? signInWithGoogleNative() : signInWithBrowser('google', 'Google');
   },
 
   // LINE 是 Supabase 的自訂 OIDC 登入（Auth Providers 裡的 custom:line）。
@@ -275,6 +304,10 @@ export const authActions = {
       throw new Error('訪客資料轉移尚未安全完成。請先重試或聯絡客服，避免紀錄遺失。');
     }
     await billing.logOut();
+    // 登出後下次能選別的 Google 帳號。
+    if (nativeGoogleReady) {
+      await import('@react-native-google-signin/google-signin').then(m => m.GoogleSignin.signOut()).catch(() => {});
+    }
     await supabase.auth.signOut();
     await transferVault.clear().catch(() => {});
     transferNotice = { status: 'none', message: '' };

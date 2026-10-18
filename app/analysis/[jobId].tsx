@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { freeMonthlyLimit, paymentsEnabled } from '@/src/lib/plan';
+import { paymentsEnabled, readQuotaHit, type QuotaHit } from '@/src/lib/plan';
 import { api } from '@/src/lib/api';
 import { supabase } from '@/src/lib/supabase';
 import { colors, space } from '@/src/theme/tokens';
@@ -26,7 +26,7 @@ export default function AnalysisScreen() {
   const [steps, setSteps] = useState<Record<string, any>>({ resolve_company: 'running', official_records: 'pending', build_report: 'pending' });
   const [done, setDone] = useState(false);
   const [status, setStatus] = useState<string>('running');
-  const [quotaExceeded, setQuotaExceeded] = useState(false);
+  const [quotaExceeded, setQuotaExceeded] = useState<QuotaHit | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
@@ -37,7 +37,7 @@ export default function AnalysisScreen() {
     let polling = false;
     let timer: ReturnType<typeof setInterval> | undefined;
     setDone(false);
-    setQuotaExceeded(false);
+    setQuotaExceeded(null);
     setAnalysisError(null);
     setStatus('running');
     setCurrent('resolve_company');
@@ -122,7 +122,7 @@ export default function AnalysisScreen() {
         if (!active) return;
         const code = e?.payload?.error;
         if (code === 'analysis_quota_exceeded') {
-          setQuotaExceeded(true);
+          setQuotaExceeded(readQuotaHit(e?.payload));
           setStatus('quota_exceeded');
         } else if (baselineKnown && isConnectionFailure(e)) {
           setStatus('recovering');
@@ -161,7 +161,7 @@ export default function AnalysisScreen() {
 
   function retry() {
     setDone(false);
-    setQuotaExceeded(false);
+    setQuotaExceeded(null);
     setAnalysisError(null);
     setStatus('running');
     setCurrent('resolve_company');
@@ -195,7 +195,7 @@ export default function AnalysisScreen() {
     return stopped ? '尚未執行' : '等待中';
   }
 
-  const stopped = quotaExceeded || status === 'failed';
+  const stopped = Boolean(quotaExceeded) || status === 'failed';
   const progress = done ? 1 : completedSteps / 4;
   const R = 68, C = 2 * Math.PI * R;
 
@@ -242,10 +242,16 @@ export default function AnalysisScreen() {
 
       {quotaExceeded ? (
         <View style={{ gap: space.md }}>
-          <Notice tone="info" title={`這個月的 ${freeMonthlyLimit} 次免費檢查用完了`}>
-            {`${paymentsEnabled ? '升級 Pro 就能不限次數繼續檢查；也可以' : '可以'}等下個月 1 日恢復。同一份職缺重新檢查不會重複算，這份職缺已經存在「我的職缺」。`}
-          </Notice>
-          {paymentsEnabled ? <Button icon="sparkles" label="升級 Pro・不限次數" onPress={() => router.push('/plans')} /> : null}
+          {quotaExceeded.pro ? (
+            <Notice tone="info" title={`這個月的 ${quotaExceeded.limit} 次檢查用完了`}>
+              {`為了防止濫用，Pro 每月最多檢查 ${quotaExceeded.limit} 份職缺，下個月 1 日恢復。同一份職缺重新檢查不會重複算，這份職缺已經存在「我的職缺」。`}
+            </Notice>
+          ) : (
+            <Notice tone="info" title={`這個月的 ${quotaExceeded.limit} 次免費檢查用完了`}>
+              {`${paymentsEnabled ? '升級 Pro 就能繼續檢查；也可以' : '可以'}等下個月 1 日恢復。同一份職缺重新檢查不會重複算，這份職缺已經存在「我的職缺」。`}
+            </Notice>
+          )}
+          {paymentsEnabled && !quotaExceeded.pro ? <Button icon="sparkles" label="升級 Pro・不限次數" onPress={() => router.push('/plans')} /> : null}
           <Button variant="soft" label="回我的職缺" onPress={() => router.replace('/jobs')} />
         </View>
       ) : null}
