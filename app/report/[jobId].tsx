@@ -8,7 +8,7 @@ import type { JobReport } from '@/src/types';
 import { SalaryBenchmarkCard } from '@/src/components/SalaryBenchmarkCard';
 import { MinimumWageNotice } from '@/src/components/MinimumWageNotice';
 import { checkMinimumWage } from '@/src/lib/minimumWage';
-import { officialRecordState } from '@/src/lib/officialRecordState';
+import { isTentativeRecords, officialRecordState } from '@/src/lib/officialRecordState';
 import { WorkHoursNotice } from '@/src/components/WorkHoursNotice';
 import { PostingRiskNotice } from '@/src/components/PostingRiskNotice';
 import { checkWorkHours } from '@/src/lib/workHours';
@@ -80,6 +80,7 @@ export default function ReportScreen() {
   const [trackingBusy, setTrackingBusy] = useState(false);
   const [correctedFields, setCorrectedFields] = useState<string[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [confirmingEmployer, setConfirmingEmployer] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
@@ -206,6 +207,21 @@ export default function ReportScreen() {
     }
   }
 
+  // 「可能是這家」直接確認：等於在選雇主畫面選它，再重新體檢（同月重查不扣次數）。
+  async function confirmProbableEmployer() {
+    const taxId = report?.company.tax_id;
+    if (!taxId || confirmingEmployer) return;
+    setConfirmingEmployer(true);
+    try {
+      await api.selectEmployer(jobId, { tax_id: taxId, entity_type: '' });
+      router.push(`/analysis/${jobId}`);
+    } catch (e: any) {
+      showMessage('確認失敗', e?.message ?? '請稍後再試，或改從登記資料選擇實際雇主。');
+    } finally {
+      setConfirmingEmployer(false);
+    }
+  }
+
   function confirmDelete() {
     confirmAction(
       '刪除這份職缺？',
@@ -266,7 +282,10 @@ export default function ReportScreen() {
   const now = new Date();
   const companyConfirmed = report.company.match_status === 'confirmed';
   const userSelected = companyConfirmed && report.company.match_method === 'user_selected';
+  const sharedAlias = companyConfirmed && report.company.match_method === 'shared_alias';
+  const probable = !companyConfirmed && report.company.match_status === 'probable' && !!report.company.legal_name && !!report.company.tax_id;
   const recordState = officialRecordState(report);
+  const tentative = isTentativeRecords(report);
   // Before build-job-report v1.2, parser hints after a manual correction are only historical clues.
   const needsReportRefresh = correctedFields.length > 0 && !report.manual_review;
   const originalHints = report.manual_review?.original_hints_to_recheck ??
@@ -390,11 +409,16 @@ export default function ReportScreen() {
       <SectionTitle title="公司身分" />
       <Surface style={{ borderRadius: 26 }}>
         <View style={styles.rowBetween}>
-          <T variant="heading" style={{ flex: 1 }}>{companyConfirmed ? '已確認是這家公司' : report.company.legal_name ? '還要你確認是哪一家' : '還沒找到這家公司'}</T>
-          <Chip tone={companyConfirmed ? 'ok' : 'caution'} label={userSelected ? '你選定的' : companyConfirmed ? '已確認' : '待確認'} />
+          <T variant="heading" style={{ flex: 1 }}>{companyConfirmed ? '已確認是這家公司' : probable ? '可能是這家公司' : report.company.legal_name ? '還要你確認是哪一家' : '還沒找到這家公司'}</T>
+          <Chip tone={companyConfirmed ? 'ok' : 'caution'} label={userSelected ? '你選定的' : sharedAlias ? '多人選過' : companyConfirmed ? '已確認' : '待確認'} />
         </View>
-        {!companyConfirmed ? (
+        {probable ? (
+          <T variant="caption" color={colors.textBody}>系統找到最像的一家，已經先查了它的違規紀錄。是這家的話點一下確認；不是的話請改選。</T>
+        ) : !companyConfirmed ? (
           <T variant="caption" color={colors.textBody}>{report.company.legal_name ? '名稱相近的公司不只一家，系統不會替你猜。' : '系統沒有找到可以直接確認的公司。'}選好實際簽約的那一家，才會查它的違規紀錄。</T>
+        ) : null}
+        {sharedAlias ? (
+          <T variant="caption" color={colors.textBody}>這個名稱有好幾位使用者都選了同一家公司，所以直接對到這家。不是的話可以改選。</T>
         ) : null}
         <View style={styles.candidate}>
           <IconCircle icon="business" coral />
@@ -409,7 +433,15 @@ export default function ReportScreen() {
         </View>
         {companyConfirmed
           ? <Button compact variant="ghost" label={userSelected ? '改選其他公司' : '不是這家公司？改選'} onPress={() => setPickerOpen(true)} />
-          : <Button variant="soft" icon="business" label="從登記資料選擇實際雇主" onPress={() => setPickerOpen(true)} />}
+          : probable
+            ? (
+              <>
+                <Button icon="checkmark-circle" label="是這家，確認" loading={confirmingEmployer} disabled={confirmingEmployer}
+                  accessibilityLabel={`確認實際雇主是${report.company.legal_name}`} onPress={() => { void confirmProbableEmployer(); }} />
+                <Button compact variant="ghost" label="不是這家，改選" onPress={() => setPickerOpen(true)} />
+              </>
+            )
+            : <Button variant="soft" icon="business" label="從登記資料選擇實際雇主" onPress={() => setPickerOpen(true)} />}
       </Surface>
     </View>
   );
@@ -429,6 +461,15 @@ export default function ReportScreen() {
         <>
           <SectionTitle title="政府違規紀錄" />
           <Surface style={{ borderRadius: 26 }}>
+            {tentative ? (
+              <Notice tone="caution" icon="help-circle" title={`可能是「${report.company.legal_name}」，點一下確認`}>
+                <T variant="caption" color={colors.textBody}>下面是這家公司的紀錄，但還沒確認它就是這份職缺的雇主。</T>
+                {probable ? (
+                  <Button compact variant="white" icon="checkmark-circle" label="是這家，確認" loading={confirmingEmployer} disabled={confirmingEmployer}
+                    onPress={() => { void confirmProbableEmployer(); }} />
+                ) : null}
+              </Notice>
+            ) : null}
             {recordState === 'none' ? <Notice tone="ok" title="公開資料裡查無紀錄">查無資料不代表沒有違規，只代表目前公開資料裡沒有。</Notice> : null}
             {recordState === 'failed' ? (
               <Notice tone="caution" title="這次查詢失敗">
@@ -476,6 +517,7 @@ export default function ReportScreen() {
               </>
             ) : null}
             {report.official_records.fetched_at ? <T variant="small" muted>查詢時間 {report.official_records.fetched_at.slice(0, 16).replace('T', ' ')}</T> : null}
+            {report.official_records.data_as_of ? <T variant="small" muted>勞動部資料更新到 {new Date(Date.parse(report.official_records.data_as_of) + 8 * 3600_000).toISOString().slice(0, 10)}</T> : null}
           </Surface>
         </>
       )}

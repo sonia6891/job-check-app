@@ -1,6 +1,6 @@
 import type { JobReport } from '@/src/types';
 import type { Tone } from '@/src/theme/tokens';
-import { officialRecordState } from '@/src/lib/officialRecordState';
+import { isTentativeRecords, officialRecordState } from '@/src/lib/officialRecordState';
 import { checkMinimumWage, wageTypeLabels } from '@/src/lib/minimumWage';
 import { checkWorkHours } from '@/src/lib/workHours';
 
@@ -32,9 +32,12 @@ export function buildChecklist(report: JobReport, now: Date): CheckItem[] {
   const company = report.company;
   items.push(company.match_status === 'confirmed'
     ? { key: 'company', tone: 'ok', title: '公司身分', value: company.legal_name ? `已確認：${company.legal_name}` : '已確認', detail: company.tax_id ? `統編 ${company.tax_id}` : null }
-    : { key: 'company', tone: 'caution', title: '公司身分', value: company.match_status === 'probable' ? '需要你確認是哪一家' : '還沒找到可確認的雇主', detail: '選定實際雇主後，才會查這家公司的官方紀錄' });
+    : company.match_status === 'probable' && company.legal_name
+      ? { key: 'company', tone: 'caution', title: '公司身分', value: `可能是：${company.legal_name}`, detail: '點一下確認是不是這家' }
+      : { key: 'company', tone: 'caution', title: '公司身分', value: company.match_status === 'probable' ? '需要你確認是哪一家' : '還沒找到可確認的雇主', detail: '選定實際雇主後，才會查這家公司的官方紀錄' });
 
   const state = officialRecordState(report);
+  const tentative = isTentativeRecords(report);
   const total = report.official_records.total;
   const latest = Object.values(report.official_records.summary_by_law ?? {})
     .map(v => v.latest_date).filter((d): d is string => !!d).sort().pop() ?? null;
@@ -46,7 +49,11 @@ export function buildChecklist(report: JobReport, now: Date): CheckItem[] {
     not_checked: { tone: 'neutral', value: '尚未查詢', detail: null },
     unlinked: { tone: 'neutral', value: '公司確認後才會查', detail: null }
   };
-  items.push({ key: 'records', title: '官方勞動紀錄', ...recordItem[state] });
+  const record = recordItem[state];
+  items.push({ key: 'records', title: '官方勞動紀錄', ...record,
+    ...(tentative && state !== 'not_checked'
+      ? { detail: ['依「可能是」的公司查詢，確認公司後才算數', record.detail].filter(Boolean).join('；') }
+      : {}) });
 
   const offer = report.salary.job_offer;
   const wage = checkMinimumWage(offer, now);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '@/src/lib/api';
 import type { EmployerCandidate } from '@/src/types';
@@ -36,12 +36,16 @@ export function EmployerPicker({ jobId, visible, currentTaxId, onClose, onSelect
   const [lookupIncomplete, setLookupIncomplete] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
+  const [companyQuery, setCompanyQuery] = useState('');
+  const [searchedQuery, setSearchedQuery] = useState('');
 
-  async function load() {
+  async function load(nameOverride = companyQuery) {
     setLoading(true);
     setLoadError(null);
     try {
-      const result = await api.listEmployerCandidates(jobId);
+      const query = nameOverride.trim();
+      const result = await api.listEmployerCandidates(jobId, query || undefined);
+      setSearchedQuery(query);
       const list = (result.candidates ?? []).filter((c) => c.tax_id && c.legal_name);
       setCandidates(list);
       setReason(result.reason ?? null);
@@ -56,7 +60,7 @@ export function EmployerPicker({ jobId, visible, currentTaxId, onClose, onSelect
   }
 
   useEffect(() => {
-    if (visible) void load();
+    if (visible) { setCompanyQuery(''); setSearchedQuery(''); void load(''); }
   }, [visible, jobId]);
 
   async function confirm() {
@@ -64,7 +68,7 @@ export function EmployerPicker({ jobId, visible, currentTaxId, onClose, onSelect
     if (!chosen) return;
     setSaving(true);
     try {
-      const result = await api.selectEmployer(jobId, chosen);
+      const result = await api.selectEmployer(jobId, chosen, searchedQuery || undefined);
       // 舊版後端會忽略選擇、重新自動比對，這時不能當作已選定。
       if (result.status !== 'confirmed' || result.match_method !== 'user_selected') {
         throw new Error('目前無法儲存你的選擇，請稍後再試。');
@@ -89,6 +93,13 @@ export function EmployerPicker({ jobId, visible, currentTaxId, onClose, onSelect
           <IconButton icon="close" label="關閉" onPress={onClose} />
         </View>
 
+        <View style={{ paddingHorizontal: 20, paddingTop: 12, gap: 8 }}>
+          <T variant="captionStrong">公司名稱不對？可以輸入招牌、登記全名或統編線索重新找</T>
+          <TextInput accessibilityLabel="更正公司名稱" value={companyQuery} onChangeText={setCompanyQuery}
+            autoCorrect={false} placeholder="輸入公司或雇主名稱" placeholderTextColor={colors.textMuted}
+            style={{ borderWidth: 1, borderColor: colors.lineStrong, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: colors.text }} />
+          <Button compact variant="soft" icon="search" label="重新搜尋雇主登記" disabled={loading || saving || !companyQuery.trim()} onPress={() => { void load(companyQuery); }} />
+        </View>
         <ScrollView contentContainerStyle={styles.body}>
           {loading ? <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} /> : null}
 
@@ -112,7 +123,9 @@ export function EmployerPicker({ jobId, visible, currentTaxId, onClose, onSelect
                 ? '醫院、學校、協會這類機構目前還查不到登記資料，暫時無法選擇。'
                 : reason === 'contact_person_not_employer'
                   ? '職缺上寫的是聯絡人姓名，不是公司名稱。請回到首頁補上公司全名後重新體檢。'
-                  : '找不到名稱相近的登記資料。可以回到首頁補上公司全名後重新體檢。'}
+                  : reason === 'company_name_missing'
+                    ? '職缺上沒有找到公司名稱。請在上方輸入公司或店家名稱，再按「重新搜尋雇主登記」。'
+                    : '找不到名稱相近的登記資料。可以回到首頁補上公司全名後重新體檢。'}
             </T>
           ) : null}
 

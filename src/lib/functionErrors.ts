@@ -22,6 +22,8 @@ export async function normalizeFunctionError(error: unknown): Promise<Error & { 
         analysis_quota_exceeded: '這個月的免費體檢次數已用完，升級 Pro 可以繼續檢查，或等下個月 1 日恢復。',
         feature_requires_pro: '這項功能是 Pro 方案的功能。',
         job_not_found: '找不到這份職缺，請重新整理。',
+        job_text_too_short: '內容太少，請貼上完整一點的職缺內容。',
+        share_text_only: '這段只有分享文字和網址，沒有職缺內容。請改用「貼網址」匯入，或貼上職缺內容、使用截圖。',
         unauthorized: '登入狀態已失效，請重新登入。',
         quota_check_failed: '暫時無法確認體檢額度，請稍後再試。'
       };

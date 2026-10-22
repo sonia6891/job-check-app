@@ -75,6 +75,10 @@ export type JobReport = {
     /** checked／partial／failed／not_checked／not_checked_until_company_confirmed（後端 build-job-report 1.1） */
     status: OfficialRecordsStatus | (string & {});
     fetched_at?: string | null;
+    /** build-job-report 1.5：違規資料副本最後同步的時間（取最舊的資料集）。 */
+    data_as_of?: string | null;
+    /** build-job-report 1.5：紀錄屬於「可能是」的公司，還沒確認。 */
+    tentative?: boolean;
     total: number;
     summary_by_law: Record<string, { count: number; latest_date: string | null }>;
     records: Array<{

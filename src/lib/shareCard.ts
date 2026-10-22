@@ -3,7 +3,7 @@ import type { Tone } from '@/src/theme/tokens';
 import { checkMinimumWage, wageTypeLabels } from '@/src/lib/minimumWage';
 import { checkWorkHours } from '@/src/lib/workHours';
 import { monthlyDaysOff } from '@/src/lib/reportVisuals';
-import { officialRecordState } from '@/src/lib/officialRecordState';
+import { isTentativeRecords, officialRecordState } from '@/src/lib/officialRecordState';
 
 export type ShareCardItem = { tone: Tone; icon: 'warning' | 'cash' | 'calendar' | 'time' | 'business' | 'shield' | 'checkmark-circle'; text: string };
 
@@ -42,7 +42,9 @@ export function buildShareCardItems(report: JobReport, now: Date, max = 3): Shar
 
   const state = officialRecordState(report);
   if ((state === 'found' || state === 'partial') && report.official_records.total > 0) {
-    items.push({ tone: 'caution', icon: 'shield', text: `公開資料查到 ${report.official_records.total} 筆違規紀錄` });
+    items.push({ tone: 'caution', icon: 'shield', text: isTentativeRecords(report)
+      ? `可能的公司查到 ${report.official_records.total} 筆違規紀錄`
+      : `公開資料查到 ${report.official_records.total} 筆違規紀錄` });
   }
   if (report.company.match_status !== 'confirmed') items.push({ tone: 'neutral', icon: 'business', text: '還沒確認是哪一家公司' });
 

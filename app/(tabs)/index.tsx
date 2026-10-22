@@ -163,9 +163,10 @@ export default function HomeScreen() {
   }
 
   async function importUrl() {
-    const value = jobUrl.trim();
-    if (!/^https:\/\//i.test(value)) {
-      return showMessage('網址格式不正確', '請貼上完整的 https:// 職缺網址。');
+    const candidate = jobUrl.match(/https:\/\/[^\s<>"'，。]+/i)?.[0]?.replace(/[)）\]】.,，。]+$/, '');
+    const value = candidate || '';
+    if (!value) {
+      return showMessage('網址格式不正確', '請貼上職缺分享連結，或含有 https:// 網址的分享文字。');
     }
 
     setBusy(true);
@@ -183,12 +184,22 @@ export default function HomeScreen() {
       // 網站沒給足夠的公開內容：切回貼文字，帶著擷取到的預覽讓使用者補。
       setJobUrl('');
       setSourceUrl(result.source_url || value);
-      if (result.extracted_preview) setText(result.extracted_preview);
+      setText(result.extracted_preview || '');
       setMode('text');
+      const reasonText: Record<string, string> = {
+        site_fetch_failed: '求職網站拒絕讀取或暫時無法連線。請到原職缺頁複製工作內容，或直接使用截圖辨識。',
+        insufficient_public_content: '這個頁面可能需要 JavaScript 才會顯示完整職缺。請補上工作內容，或使用截圖辨識。',
+        needs_confirmation: '已擷取部分公開內容。請核對公司、薪資和工時，補齊後再開始體檢。',
+        not_a_web_page: '連結不是可讀取的網頁，或內容太大。請改用截圖辨識。',
+        company_page_not_job: '這是公司介紹頁，不是職缺。請在公司頁點進想應徵的職缺，再分享那個職缺的網址。',
+        parse_failed: '網頁內容已讀取，但自動分析未成功。請檢查擷取文字後重試。',
+        fetch_exception: '讀取網站時連線中斷或遭到限制。請改用截圖辨識。'
+      };
+      showMessage('已切換為文字補充模式', reasonText[result.reason || ''] || '網站未提供可直接分析的職缺內容。請貼上職缺描述或使用截圖。');
     } catch (e: any) {
       const payload = e?.payload;
       if (payload?.error === 'unsupported_job_site') {
-        showMessage('目前尚未支援這個網站', '網址匯入目前支援 104、1111、518、Cake、Yourator、yes123；其他網站請先貼上職缺文字。');
+        showMessage('目前尚未支援這個網站', '網址匯入目前支援 104、1111、518、yes123、Cake、Yourator 等常見求職網站；其他網站請先貼上職缺文字。');
       } else {
         showMessage('網址匯入失敗', e?.message ?? '請改用貼上職缺文字。');
       }

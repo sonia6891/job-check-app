@@ -1,5 +1,5 @@
 import type { JobReport } from '@/src/types';
-import { officialRecordState, recordStateLabel } from '@/src/lib/officialRecordState';
+import { isTentativeRecords, officialRecordState, recordStateLabel } from '@/src/lib/officialRecordState';
 import { checkMinimumWage, wageTypeLabels } from '@/src/lib/minimumWage';
 import { checkWorkHours } from '@/src/lib/workHours';
 
@@ -20,13 +20,15 @@ export function buildReportShareText(report: JobReport, now: Date, maxQuestions 
   lines.push(`【職缺體檢】${report.job.title || '未命名職缺'}｜${report.job.display_company_name || '公司待確認'}`);
 
   const confirmed = report.company.match_status === 'confirmed';
-  lines.push(`公司法人：${confirmed && report.company.legal_name ? `${report.company.legal_name}（已確認）` : '尚未確認是哪一家公司'}`);
+  const tentative = isTentativeRecords(report);
+  lines.push(`公司法人：${confirmed && report.company.legal_name ? `${report.company.legal_name}（已確認）`
+    : tentative ? `可能是${report.company.legal_name}（尚未確認）` : '尚未確認是哪一家公司'}`);
 
   const state = officialRecordState(report);
   const records = state === 'found' || (state === 'partial' && report.official_records.total > 0)
     ? `${report.official_records.total} 筆${state === 'partial' ? '（部分資料未查到）' : ''}`
     : recordStateLabel[state];
-  lines.push(`官方勞動紀錄：${records}`);
+  lines.push(`官方勞動紀錄：${records}${tentative ? '（依可能的公司查詢，尚未確認）' : ''}`);
 
   const offer = report.salary.job_offer;
   if (offer.raw) {

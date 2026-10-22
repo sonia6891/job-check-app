@@ -39,7 +39,7 @@ async function recognizeTall(image: OcrImage & { width: number; height: number }
     const rendered = await context.renderAsync();
     let saved;
     try {
-      saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.95 });
+      saved = await rendered.saveAsync({ format: SaveFormat.PNG });
     } finally {
       // 每段都會解出整張大圖，用完馬上釋放，超長截圖才不會吃光記憶體。
       rendered.release();
@@ -48,7 +48,8 @@ async function recognizeTall(image: OcrImage & { width: number; height: number }
     const raw = await recognizeRaw(saved.uri);
     parts.push(keepTileText(raw.blocks, tile, raw.text));
   }
-  return parts.filter(Boolean).join('\n');
+  // Some native OCR versions return no bounding boxes. Merge overlapping text rather than duplicating it.
+  return mergePages(parts.filter(Boolean));
 }
 
 function toNativeOcrError(error: any) {

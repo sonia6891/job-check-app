@@ -31,17 +31,18 @@ export const api = {
   buildReport: (jobPostId: string) =>
     invoke<JobReport>('build-job-report', { job_post_id: jobPostId }),
 
-  listEmployerCandidates: (jobPostId: string) =>
+  listEmployerCandidates: (jobPostId: string, companyName?: string) =>
     invoke<{
       status: string;
       candidates?: EmployerCandidate[];
       reason?: string | null;
       external_lookup?: { ok: boolean; errors: string[] };
-    }>('resolve-company', { job_post_id: jobPostId, list_candidates: true }),
+    }>('resolve-company', { job_post_id: jobPostId, list_candidates: true, company_name: companyName?.trim() || undefined }),
 
-  selectEmployer: (jobPostId: string, candidate: Pick<EmployerCandidate, 'tax_id' | 'entity_type'>) =>
+  selectEmployer: (jobPostId: string, candidate: Pick<EmployerCandidate, 'tax_id' | 'entity_type'>, companyName?: string) =>
     invoke<{ status: string; match_method?: string; company?: EmployerCandidate | null }>('resolve-company', {
       job_post_id: jobPostId,
+      company_name: companyName?.trim() || undefined,
       selected_tax_id: candidate.tax_id,
       selected_entity_type: candidate.entity_type
     }),
