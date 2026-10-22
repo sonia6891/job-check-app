@@ -30,10 +30,12 @@ const allowed = ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_K
   'EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID', 'EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID', 'EXPO_PUBLIC_PRIVACY_POLICY_URL'];
 fs.writeFileSync('.env.local', allowed.map(k => `${k}=${JSON.stringify(env[k] || '')}`).join('\n') + '\n');
 JS
-# Every TestFlight upload needs a new, larger CFBundleVersion; the workflow run number always grows.
+# Every TestFlight upload needs a new, larger CFBundleVersion. Builds come from two repos (this one and
+# the public job-check-app) whose GITHUB_RUN_NUMBERs overlap and stay far below the 10014 already uploaded
+# on 2026-10-21, so use minutes since 1970 (about 29.9 million in 2026): always larger, never shared.
 if [[ "$mode" == testflight ]]; then
-  export IOS_BUILD_NUMBER="${IOS_BUILD_NUMBER:-${GITHUB_RUN_NUMBER:-}}"
-  [[ "$IOS_BUILD_NUMBER" =~ ^[0-9]+$ ]] || { echo 'Missing numeric build number (GITHUB_RUN_NUMBER)'; exit 1; }
+  export IOS_BUILD_NUMBER="${IOS_BUILD_NUMBER:-$(( $(date -u +%s) / 60 ))}"
+  [[ "$IOS_BUILD_NUMBER" =~ ^[0-9]+$ ]] || { echo 'Missing numeric build number'; exit 1; }
   node -e "const fs=require('fs');const a=JSON.parse(fs.readFileSync('app.json','utf8'));a.expo.ios.buildNumber=process.env.IOS_BUILD_NUMBER;fs.writeFileSync('app.json',JSON.stringify(a,null,2)+'\n')"
   echo "iOS build number: $IOS_BUILD_NUMBER"
 fi

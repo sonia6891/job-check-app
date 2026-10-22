@@ -109,7 +109,7 @@ jobs:
         if: success()
         run: |
           if [[ "$BUILD_MODE" == testflight ]]; then
-            echo "Build ${{ github.run_number }} uploaded to App Store Connect for TestFlight. Details are in the build log." >> "$GITHUB_STEP_SUMMARY"
+            echo "Uploaded to App Store Connect for TestFlight; the build number is in the build log (iOS build number: …)." >> "$GITHUB_STEP_SUMMARY"
           elif [[ "$BUILD_MODE" == adhoc ]]; then
             echo 'Signed Ad Hoc IPA created; device installation still needs verification.' >> "$GITHUB_STEP_SUMMARY"
           else

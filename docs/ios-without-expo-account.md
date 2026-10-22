@@ -23,7 +23,7 @@ node scripts/sync-build-repo.mjs --build testflight
 
 - `unsigned`：Release 原生編譯檢查；成功不代表能裝到 iPhone。
 - `adhoc`：使用 Apple Distribution 憑證及 Ad Hoc 描述檔產出 IPA。成功後在該次執行的 Artifacts 下載 `job-check-ios-adhoc-*`。這不是公開安裝網址。
-- `testflight`：用 App Store 描述檔簽章後直接上傳 App Store Connect，Apple 處理完（通常 5–30 分鐘）出現在 TestFlight。版本號沿用 `app.json` 的 `version`，建置號自動用該次 workflow 的執行編號（每次一定變大）。不產生 Artifacts，不受附件額度影響。
+- `testflight`：用 App Store 描述檔簽章後直接上傳 App Store Connect，Apple 處理完（通常 5–30 分鐘）出現在 TestFlight。版本號沿用 `app.json` 的 `version`，建置號自動用打包當下距 1970 年的分鐘數（2026 年約 2,985 萬；每次一定變大，兩個專案打包也不會撞號。原本用執行編號，但 10/21 已上傳 10014，執行編號都比它小）。不產生 Artifacts，不受附件額度影響。
 
 也可以在命令列執行：`gh workflow run ios-native.yml -R sonia6891/job-check-app -f mode=testflight`（不會先同步程式碼）。
 
