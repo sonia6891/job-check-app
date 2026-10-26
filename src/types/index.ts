@@ -91,6 +91,25 @@ export type JobReport = {
       fine_amount?: number | null;
       source_url?: string | null;
     }>;
+    /**
+     * build-job-report 1.6：名稱寫法不同（similar_name）或只寫負責人姓名（representative_name）、
+     * 可能是同一家的紀錄。只列給使用者判斷，不算進 total 和 summary_by_law。
+     */
+    near_matches?: Array<{
+      reason: 'similar_name' | 'representative_name';
+      similarity: number;
+      same_county: boolean;
+      /** 紀錄上寫的名稱 */
+      record_name: string;
+      dataset_id?: string;
+      agency?: string | null;
+      law_type?: string;
+      law_article?: string | null;
+      violation_summary?: string | null;
+      decision_date?: string | null;
+      fine_amount?: number | null;
+      source_url?: string | null;
+    }>;
   };
   salary: {
     job_offer: { raw?: string | null; min?: number | null; max?: number | null; type?: string | null; currency?: string };

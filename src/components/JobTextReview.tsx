@@ -11,13 +11,15 @@ type Props = {
   /** 一次選了幾張截圖（大於 1 時提醒使用者看一下接起來的順序）。 */
   pageCount?: number;
   onChangeText: (text: string) => void; onCancel: () => void; onConfirm: () => void;
+  /** 從文字抓到的公司名稱（後端預覽），使用者可以改；違規紀錄就是用它去查。 */
+  company?: string; companyLoading?: boolean; onChangeCompany?: (company: string) => void;
 };
 
 /**
  * 送出前的核對視窗（Figma「核對職缺文字」）：從下方滑出，內容可以直接改。
  * 「系統讀到的資訊」只用本機規則判斷有沒有寫薪資和上班時間，不代表整份解析結果。
  */
-export function JobTextReview({ visible, mode, text, sourceUrl, busy, pageCount, onChangeText, onCancel, onConfirm }: Props) {
+export function JobTextReview({ visible, mode, text, sourceUrl, busy, pageCount, onChangeText, onCancel, onConfirm, company, companyLoading, onChangeCompany }: Props) {
   const insets = useSafeAreaInsets();
   const length = text.trim().length;
   const hasSalary = Boolean(parseSalaryText(text));
@@ -47,9 +49,19 @@ export function JobTextReview({ visible, mode, text, sourceUrl, busy, pageCount,
                   textAlignVertical="top" style={styles.editor} placeholder="請貼上職缺內容" placeholderTextColor={colors.placeholder} />
                 <T variant="small" muted style={{ textAlign: 'right' }}>{length} 字{length < 10 ? '・至少要 10 個字' : ''}</T>
               </View>
+              {onChangeCompany ? (
+                <View style={{ gap: 6 }}>
+                  <T variant="captionStrong" muted>公司名稱（用來查勞動部違規紀錄）</T>
+                  <TextInput accessibilityLabel="公司名稱" value={company ?? ''} onChangeText={onChangeCompany} editable={!busy}
+                    placeholder={companyLoading ? '正在找公司名稱…' : '沒找到公司名稱，請輸入'} placeholderTextColor={colors.placeholder}
+                    autoCorrect={false} style={styles.company} />
+                  <T variant="small" muted>寫錯或只有招牌名稱的話，改成「○○有限公司」這種登記名稱會查得比較準。</T>
+                </View>
+              ) : null}
               <View style={{ gap: space.sm }}>
                 <T variant="captionStrong" muted>系統讀到的資訊</T>
                 <View style={styles.chips}>
+                  {onChangeCompany ? <Chip tone={company?.trim() ? 'ok' : 'caution'} label={company?.trim() ? '✓ 公司' : '沒抓到公司'} /> : null}
                   <Chip tone={hasSalary ? 'ok' : 'caution'} label={hasSalary ? '✓ 薪資' : '沒寫薪資'} />
                   <Chip tone={hasHours ? 'ok' : 'caution'} label={hasHours ? '✓ 上班時間' : '沒寫上班時間'} />
                 </View>
@@ -72,5 +84,6 @@ const styles = StyleSheet.create({
   grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: colors.lineStrong },
   source: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primarySoft, borderRadius: radius.sm, padding: space.md },
   editor: { minHeight: 140, maxHeight: 280, backgroundColor: colors.surfaceMuted, borderRadius: 18, padding: 14, fontSize: 15, lineHeight: 23, color: colors.text },
+  company: { minHeight: 48, backgroundColor: colors.surfaceMuted, borderRadius: 14, paddingHorizontal: 14, fontSize: 15, color: colors.text },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 }
 });

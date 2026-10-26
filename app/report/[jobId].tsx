@@ -30,6 +30,17 @@ import { colors, radius, space, tone as toneStyles, type Tone } from '@/src/them
 import { Button, Chip, Empty, FocusStatusBar, IconButton, IconCircle, Notice, Num, Screen, SectionTitle, Surface, T, type IconName } from '@/src/ui';
 import { DaysOffGrid, SalaryScaleView, ShiftBar } from '@/src/ui/viz';
 
+type NearMatch = NonNullable<JobReport['official_records']['near_matches']>[number];
+
+function nearMatchReason(match: NearMatch) {
+  const where = match.same_county ? '，主管機關在登記地址的縣市' : '';
+  if (match.reason === 'representative_name') return `紀錄只寫了事業主姓名，和登記的負責人同名${where}`;
+  return `名稱相似度 ${Math.round(match.similarity * 100)}%${where}`;
+}
+
+// 勞動部「違反勞動法令事業單位（雇主）查詢系統」，名稱寫法對不上時讓使用者自己搜尋。
+const MOL_ANNOUNCEMENT_URL = 'https://announcement.mol.gov.tw/';
+
 const lawNames: Record<string, string> = {
   labor_standards: '勞動基準法',
   employment_service: '就業服務法',
@@ -73,6 +84,7 @@ export default function ReportScreen() {
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
   const [report, setReport] = useState<JobReport | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [nearExpanded, setNearExpanded] = useState(false);
   const [saved, setSaved] = useState(false);
   const [savedReady, setSavedReady] = useState(false);
   const [savedBusy, setSavedBusy] = useState(false);
@@ -285,6 +297,7 @@ export default function ReportScreen() {
   const sharedAlias = companyConfirmed && report.company.match_method === 'shared_alias';
   const probable = !companyConfirmed && report.company.match_status === 'probable' && !!report.company.legal_name && !!report.company.tax_id;
   const recordState = officialRecordState(report);
+  const nearMatches = report.official_records.near_matches ?? [];
   const tentative = isTentativeRecords(report);
   // Before build-job-report v1.2, parser hints after a manual correction are only historical clues.
   const needsReportRefresh = correctedFields.length > 0 && !report.manual_review;
@@ -470,7 +483,7 @@ export default function ReportScreen() {
                 ) : null}
               </Notice>
             ) : null}
-            {recordState === 'none' ? <Notice tone="ok" title="公開資料裡查無紀錄">查無資料不代表沒有違規，只代表目前公開資料裡沒有。</Notice> : null}
+            {recordState === 'none' ? <Notice tone="neutral" title="勞動部公開資料裡沒有找到這家">不代表沒有違規，只代表目前公開資料裡沒有；名稱寫法不同的紀錄也可能沒對到。</Notice> : null}
             {recordState === 'failed' ? (
               <Notice tone="caution" title="這次查詢失敗">
                 <T variant="caption" color={colors.textBody}>不是查無資料。報告其他部分照常顯示，可以重新查詢。</T>
@@ -515,6 +528,32 @@ export default function ReportScreen() {
                     onSource={(url) => void openOfficialSource(url)} />
                 ))}
               </>
+            ) : null}
+            {nearMatches.length ? (
+              <>
+                <Notice tone="neutral" icon="help-circle" title={`另有 ${nearMatches.length} 筆名稱相近的紀錄，不一定是這家`}>
+                  <T variant="caption" color={colors.textBody}>勞動部紀錄沒有統一編號，只能比對名稱。這幾筆的名稱和這家公司很像，或只寫了同名的負責人，請自己看名稱和地區判斷；不算進上面的筆數。</T>
+                </Notice>
+                <Pressable accessibilityRole="button" onPress={() => setNearExpanded(!nearExpanded)} style={styles.inlineLink}>
+                  <T variant="captionStrong" color={colors.primary}>{nearExpanded ? '收合名稱相近的紀錄' : '查看名稱相近的紀錄'}</T>
+                  <Ionicons name={nearExpanded ? 'chevron-up' : 'chevron-down'} color={colors.primary} size={16} />
+                </Pressable>
+                {nearExpanded && nearMatches.map((match, i) => (
+                  <View key={`near-${match.dataset_id || 'record'}-${i}`} style={{ gap: 6 }}>
+                    <T variant="captionStrong">紀錄上的名稱：{match.record_name}</T>
+                    <T variant="small" muted>{nearMatchReason(match)}</T>
+                    <OfficialRecordCard record={match} lawName={lawNames[match.law_type || ''] || match.law_type || '官方紀錄'}
+                      onSource={(url) => void openOfficialSource(url)} />
+                  </View>
+                ))}
+              </>
+            ) : null}
+            {recordState !== 'not_checked' ? (
+              <Pressable accessibilityRole="link" accessibilityLabel="到勞動部違反勞動法令查詢系統自己核對"
+                onPress={() => { void openOfficialSource(MOL_ANNOUNCEMENT_URL); }} style={styles.inlineLink}>
+                <T variant="captionStrong" color={colors.primary}>到勞動部查詢系統自己核對</T>
+                <Ionicons name="open-outline" color={colors.primary} size={16} />
+              </Pressable>
             ) : null}
             {report.official_records.fetched_at ? <T variant="small" muted>查詢時間 {report.official_records.fetched_at.slice(0, 16).replace('T', ' ')}</T> : null}
             {report.official_records.data_as_of ? <T variant="small" muted>勞動部資料更新到 {new Date(Date.parse(report.official_records.data_as_of) + 8 * 3600_000).toISOString().slice(0, 10)}</T> : null}

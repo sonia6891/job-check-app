@@ -16,6 +16,7 @@ import { Button, FocusStatusBar, IconCircle, Num, Screen, SectionTitle, T } from
 import { showMessage } from '@/src/lib/uiAlerts';
 import { paymentsEnabled, usePlan } from '@/src/lib/plan';
 import { relativeDay } from '@/src/lib/myJobs';
+import { findJobUrl, isShareOnlyText, jobSiteName } from '@/src/lib/jobLinks';
 
 type PendingOcr = {
   assetUri: string;
@@ -75,6 +76,10 @@ export default function HomeScreen() {
   const [jobUrl, setJobUrl] = useState('');
   const [keepOriginal, setKeepOriginal] = useState(false);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  // 核對視窗裡的公司名稱：先用後端預覽抓一次，使用者改過就不再覆蓋。
+  const [reviewCompany, setReviewCompany] = useState('');
+  const [companyTouched, setCompanyTouched] = useState(false);
+  const [companyLoading, setCompanyLoading] = useState(false);
   const draftLoaded = useRef(false);
 
   // 還原上次沒送出的內容，之後每次變更都存起來。
@@ -90,6 +95,30 @@ export default function HomeScreen() {
     if (!draftLoaded.current) return;
     void prefs.setDraft({ text, sourceUrl });
   }, [text, sourceUrl]);
+
+  const reviewOpen = Boolean(pendingOcr) || reviewText;
+  const reviewBody = pendingOcr ? ocrText : text;
+  const fromScreenshot = Boolean(pendingOcr);
+  useEffect(() => {
+    if (!reviewOpen) {
+      setReviewCompany('');
+      setCompanyTouched(false);
+      setCompanyLoading(false);
+      return;
+    }
+    if (companyTouched || reviewBody.trim().length < 10) return;
+    let cancelled = false;
+    setCompanyLoading(true);
+    const timer = setTimeout(() => {
+      api.previewJob(reviewBody.trim(), fromScreenshot)
+        .then((r) => { if (!cancelled) setReviewCompany(r.parsed?.display_company_name ?? ''); })
+        .catch(() => undefined)
+        .finally(() => { if (!cancelled) setCompanyLoading(false); });
+    }, 600);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [reviewOpen, reviewBody, fromScreenshot, companyTouched]);
+
+  const confirmedCompany = companyTouched ? reviewCompany.trim() || null : null;
 
   useFocusEffect(useCallback(() => {
     prefs.getKeepOriginal().then(setKeepOriginal);
@@ -148,7 +177,7 @@ export default function HomeScreen() {
     try {
       const auth = await ensureGuestSession();
       if (!auth.ok) throw new Error(auth.reason);
-      const parsed = await api.parseTextJob(text.trim(), null, undefined, sourceUrl);
+      const parsed = await api.parseTextJob(text.trim(), null, undefined, sourceUrl, confirmedCompany);
       if (!parsed.job_id) throw new Error('job_id_missing');
       await prefs.setDraft({ text: '', sourceUrl: null });
       setReviewText(false);
@@ -162,9 +191,12 @@ export default function HomeScreen() {
     }
   }
 
-  async function importUrl() {
-    const candidate = jobUrl.match(/https:\/\/[^\s<>"'，。]+/i)?.[0]?.replace(/[)）\]】.,，。]+$/, '');
-    const value = candidate || '';
+  /**
+   * 讀取職缺網址。input 可以是整段分享文字（104 App 分享出來的「我在104工作快找上發現了…https://…」），
+   * 從裡面找出網址。pastedText 是從「貼上職缺」框來的：網站讀不到時，內容夠的話改用貼上的文字體檢。
+   */
+  async function importUrl(input: string = jobUrl, pastedText?: string) {
+    const value = findJobUrl(input) || input.match(/https?:\/\/[^\s<>"'，。]+/i)?.[0]?.replace(/[)）\]】.,，。]+$/, '') || '';
     if (!value) {
       return showMessage('網址格式不正確', '請貼上職缺分享連結，或含有 https:// 網址的分享文字。');
     }
@@ -177,15 +209,15 @@ export default function HomeScreen() {
 
       if (result.status === 'parsed' && result.job_id) {
         setJobUrl('');
+        if (pastedText !== undefined) {
+          setText('');
+          setSourceUrl(null);
+          await prefs.setDraft({ text: '', sourceUrl: null });
+        }
         router.push(`/analysis/${result.job_id}`);
         return;
       }
 
-      // 網站沒給足夠的公開內容：切回貼文字，帶著擷取到的預覽讓使用者補。
-      setJobUrl('');
-      setSourceUrl(result.source_url || value);
-      setText(result.extracted_preview || '');
-      setMode('text');
       const reasonText: Record<string, string> = {
         site_fetch_failed: '求職網站拒絕讀取或暫時無法連線。請到原職缺頁複製工作內容，或直接使用截圖辨識。',
         insufficient_public_content: '這個頁面可能需要 JavaScript 才會顯示完整職缺。請補上工作內容，或使用截圖辨識。',
@@ -195,7 +227,19 @@ export default function HomeScreen() {
         parse_failed: '網頁內容已讀取，但自動分析未成功。請檢查擷取文字後重試。',
         fetch_exception: '讀取網站時連線中斷或遭到限制。請改用截圖辨識。'
       };
-      showMessage('已切換為文字補充模式', reasonText[result.reason || ''] || '網站未提供可直接分析的職缺內容。請貼上職缺描述或使用截圖。');
+      const why = reasonText[result.reason || ''] || '網站未提供可直接分析的職缺內容。請貼上職缺描述或使用截圖。';
+      setJobUrl('');
+      setSourceUrl(result.source_url || value);
+      setMode('text');
+      // 貼上的內容本身就是完整職缺（不只是分享的一兩句話）：網站讀不到也能直接用它體檢。
+      if (pastedText !== undefined && !isShareOnlyText(pastedText) && result.reason !== 'company_page_not_job') {
+        setReviewText(true);
+        showMessage('網站讀不到，改用你貼的內容', why);
+        return;
+      }
+      // 網站沒給足夠的公開內容：切回貼文字，帶著擷取到的預覽讓使用者補。
+      setText(result.extracted_preview || '');
+      showMessage('已切換為文字補充模式', why);
     } catch (e: any) {
       const payload = e?.payload;
       if (payload?.error === 'unsupported_job_site') {
@@ -290,7 +334,7 @@ export default function HomeScreen() {
       const parsed = await api.parseTextJob(ocrText.trim(), prep.job_post_id, {
         fileId: prep.file_id, engine: pendingOcr.result.engine,
         language: pendingOcr.result.language, confidence: pendingOcr.result.confidence
-      });
+      }, null, confirmedCompany);
       if (!parsed.job_id) throw new Error('job_id_missing');
       prep = null;
       setPendingOcr(null);
@@ -313,6 +357,17 @@ export default function HomeScreen() {
   const now = new Date();
   const tip = TIPS[Math.floor(now.getTime() / 86400000) % TIPS.length];
   const urlMode = mode === 'url';
+  // 貼上框裡有職缺網址（例如 104 App 的分享文字）：按下去直接讀網址。讀過失敗、正在補文字時就不再讀。
+  const detectedLink = !urlMode && !sourceUrl ? findJobUrl(text) : null;
+
+  function startCheck() {
+    if (detectedLink) {
+      void importUrl(text, text);
+      return;
+    }
+    if (text.trim().length < 10) showMessage('職缺文字太少', '請貼上完整一點的職缺內容，至少 10 個字。');
+    else setReviewText(true);
+  }
 
   function pickImage() {
     if (Platform.OS === 'web') {
@@ -379,21 +434,25 @@ export default function HomeScreen() {
               editable={!busy}
               multiline
               textAlignVertical="top"
-              placeholder="把 104、1111 或 Facebook 社團上的職缺整段貼進來…"
+              placeholder="把 104、1111 App 的分享連結，或 Facebook 社團上的職缺整段貼進來…"
               placeholderTextColor={colors.placeholder}
               style={[styles.input, styles.textArea, busy && { opacity: 0.6 }]}
             />
           )}
 
+          {detectedLink ? (
+            <View style={styles.linkHint} accessible accessibilityLabel={`偵測到${jobSiteName(detectedLink)}職缺網址，會直接讀取這份職缺`}>
+              <Ionicons name="link" size={15} color="#FFFFFF" />
+              <T variant="small" color={onBrand.text} style={{ flex: 1 }}>偵測到 {jobSiteName(detectedLink)} 職缺網址，會直接讀取這份職缺的公司、薪資和內容</T>
+            </View>
+          ) : null}
+
           <View style={styles.actions}>
             <View style={{ flex: 1 }}>
               {urlMode
                 ? <Button variant="white" icon="link" label="讀取這份職缺" loading={busy} disabled={Boolean(setupReason)} onPress={() => { void importUrl(); }} />
-                : <Button variant="white" icon="search" label="開始檢查" loading={busy} disabled={Boolean(setupReason)}
-                    onPress={() => {
-                      if (text.trim().length < 10) showMessage('職缺文字太少', '請貼上完整一點的職缺內容，至少 10 個字。');
-                      else setReviewText(true);
-                    }} />}
+                : <Button variant="white" icon={detectedLink ? 'link' : 'search'} label={detectedLink ? '讀取並檢查' : '開始檢查'} loading={busy}
+                    disabled={Boolean(setupReason)} onPress={startCheck} />}
             </View>
             <Pressable accessibilityRole="button" accessibilityLabel={urlMode ? '改回貼上文字' : '改用職缺網址'} accessibilityState={{ selected: urlMode }}
               onPress={() => setMode(urlMode ? 'text' : 'url')} style={({ pressed }) => [styles.modeBtn, urlMode && styles.modeBtnOn, pressed && { opacity: 0.8 }]}>
@@ -484,6 +543,9 @@ export default function HomeScreen() {
         onChangeText={pendingOcr ? setOcrText : setText}
         onCancel={pendingOcr ? discardOcr : () => setReviewText(false)}
         onConfirm={() => { void (pendingOcr ? confirmOcrAndAnalyze() : analyzeText()); }}
+        company={reviewCompany}
+        companyLoading={companyLoading}
+        onChangeCompany={(value) => { setCompanyTouched(true); setReviewCompany(value); }}
       />
     </View>
   );
@@ -495,6 +557,7 @@ const styles = StyleSheet.create({
   input: { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: 14, fontSize: 15, lineHeight: 22, color: colors.text },
   textArea: { minHeight: 96, maxHeight: 220, paddingTop: 12, paddingBottom: 12 },
   urlInput: { minHeight: 54 },
+  linkHint: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: onBrand.chip, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 8 },
   sourceBox: { backgroundColor: colors.surface, borderRadius: radius.md, padding: space.md, gap: 4 },
   sourceHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 10 },

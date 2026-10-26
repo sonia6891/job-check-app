@@ -12,11 +12,13 @@ async function invoke<T>(name: string, body: Record<string, unknown>): Promise<T
 }
 
 export const api = {
-  parseTextJob: (text: string, jobPostId?: string | null, fileMeta?: { fileId?: string; engine?: string; language?: string; confidence?: number }, sourceUrl?: string | null) =>
+  parseTextJob: (text: string, jobPostId?: string | null, fileMeta?: { fileId?: string; engine?: string; language?: string; confidence?: number }, sourceUrl?: string | null, companyName?: string | null) =>
     invoke<JobParseResult>('parse-job', {
       text,
       source_type: jobPostId ? 'image' : sourceUrl ? 'url' : 'text',
       source_url: sourceUrl ?? null,
+      // 使用者在核對視窗改過的公司名稱；沒改就讓後端自己從文字找。
+      company_name: companyName?.trim() || undefined,
       job_post_id: jobPostId ?? null,
       file_id: fileMeta?.fileId ?? null,
       ocr_engine: fileMeta?.engine ?? null,
@@ -24,6 +26,10 @@ export const api = {
       ocr_confidence: fileMeta?.confidence ?? null,
       save: true
     }),
+
+  // 核對視窗用：只解析不存檔、不扣次數，先讓使用者看到抓到的公司名稱。
+  previewJob: (text: string, fromScreenshot: boolean) =>
+    invoke<JobParseResult>('parse-job', { text, source_type: fromScreenshot ? 'image' : 'text', save: false }),
 
   runAnalysis: (jobPostId: string) =>
     invoke<AnalysisRunResult>('run-job-analysis', { job_post_id: jobPostId }),
