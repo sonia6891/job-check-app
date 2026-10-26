@@ -26,7 +26,6 @@ type PendingOcr = {
   filename: string | null;
   result: OcrResult;
 };
-type InputMode = 'text' | 'url' | 'image';
 // 上限由後端決定（job_analysis_quota_status），免費／Pro、開放購買前後畫面都不用自己猜。
 type Quota = { kind: 'loading' } | { kind: 'error' } | { kind: 'count'; used: number; limit: number; plan: string };
 type RecentJob = JobCardData & { created_at?: string | null };
@@ -104,8 +103,6 @@ export default function HomeScreen() {
   const [pendingOcr, setPendingOcr] = useState<PendingOcr | null>(null);
   const [reviewText, setReviewText] = useState(false);
   const [ocrText, setOcrText] = useState('');
-  const [mode, setMode] = useState<InputMode>('text');
-  const [jobUrl, setJobUrl] = useState('');
   const [keepOriginal, setKeepOriginal] = useState(false);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   // 核對視窗裡的公司名稱：先用後端預覽抓一次，使用者改過就不再覆蓋。
@@ -227,7 +224,7 @@ export default function HomeScreen() {
    * 讀取職缺網址。input 可以是整段分享文字（104 App 分享出來的「我在104工作快找上發現了…https://…」），
    * 從裡面找出網址。pastedText 是從「貼上職缺」框來的：網站讀不到時，內容夠的話改用貼上的文字體檢。
    */
-  async function importUrl(input: string = jobUrl, pastedText?: string) {
+  async function importUrl(input: string, pastedText?: string) {
     const value = findJobUrl(input) || input.match(/https?:\/\/[^\s<>"'，。]+/i)?.[0]?.replace(/[)）\]】.,，。]+$/, '') || '';
     if (!value) {
       return showMessage('網址格式不正確', '請貼上職缺分享連結，或含有 https:// 網址的分享文字。');
@@ -238,7 +235,6 @@ export default function HomeScreen() {
       const auth = await ensureGuestSession();
       if (!auth.ok) throw new Error(auth.reason);
       const openAnalysis = async (jobId: string) => {
-        setJobUrl('');
         if (pastedText !== undefined) {
           setText('');
           setSourceUrl(null);
@@ -270,9 +266,7 @@ export default function HomeScreen() {
         fetch_exception: '讀取網站時連線中斷或遭到限制。請改用截圖辨識。'
       };
       const why = reasonText[result.reason || ''] || '網站未提供可直接分析的職缺內容。請貼上職缺描述或使用截圖。';
-      setJobUrl('');
       setSourceUrl(result.source_url || value);
-      setMode('text');
       // 貼上的內容本身就是完整職缺（不只是分享的一兩句話）：網站讀不到也能直接用它體檢。
       if (pastedText !== undefined && !isShareOnlyText(pastedText) && result.reason !== 'company_page_not_job') {
         setReviewText(true);
@@ -405,9 +399,9 @@ export default function HomeScreen() {
   const remaining = quota.kind === 'count' ? Math.max(0, quota.limit - quota.used) : 0;
   const now = new Date();
   const tip = TIPS[Math.floor(now.getTime() / 86400000) % TIPS.length];
-  const urlMode = mode === 'url';
   // 貼上框裡有職缺網址（例如 104 App 的分享文字）：按下去直接讀網址。讀過失敗、正在補文字時就不再讀。
-  const detectedLink = !urlMode && !sourceUrl ? findJobUrl(text) : null;
+  // 網址、分享文字、職缺內容都貼在同一個框，不用再切換「貼網址」模式。
+  const detectedLink = !sourceUrl ? findJobUrl(text) : null;
 
   function startCheck() {
     if (detectedLink) {
@@ -442,11 +436,11 @@ export default function HomeScreen() {
       <Screen safeTop tabBar header={header}>
         <View style={styles.pasteCard}>
           <View style={{ gap: 2 }}>
-            <T variant="title" color={onBrand.text}>{urlMode ? '貼上職缺網址' : '貼上職缺'}</T>
-            <T variant="caption" color={onBrand.muted}>{urlMode ? '支援 104、1111、518、Cake、Yourator、yes123' : '30 秒幫你找出藏在裡面的地雷'}</T>
+            <T variant="title" color={onBrand.text}>貼上職缺</T>
+            <T variant="caption" color={onBrand.muted}>網址、分享連結、職缺內容都可以，30 秒找出地雷</T>
           </View>
 
-          {sourceUrl && !urlMode ? (
+          {sourceUrl ? (
             <View style={styles.sourceBox}>
               <View style={styles.sourceHead}>
                 <Ionicons name="link" size={15} color={colors.primary} />
@@ -462,32 +456,18 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          {urlMode ? (
-            <TextInput
-              accessibilityLabel="職缺網址"
-              value={jobUrl}
-              onChangeText={setJobUrl}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              placeholder="https://www.104.com.tw/job/..."
-              placeholderTextColor={colors.placeholder}
-              style={[styles.input, styles.urlInput]}
-            />
-          ) : (
-            <TextInput
-              accessibilityLabel="職缺文字內容"
-              accessibilityHint="貼上職缺文字，至少十個字才能檢查"
-              value={text}
-              onChangeText={setText}
-              editable={!busy}
-              multiline
-              textAlignVertical="top"
-              placeholder="把 104、1111 App 的分享連結，或 Facebook 社團上的職缺整段貼進來…"
-              placeholderTextColor={colors.placeholder}
-              style={[styles.input, styles.textArea, busy && { opacity: 0.6 }]}
-            />
-          )}
+          <TextInput
+            accessibilityLabel="職缺文字內容"
+            accessibilityHint="貼上職缺文字，至少十個字才能檢查"
+            value={text}
+            onChangeText={setText}
+            editable={!busy}
+            multiline
+            textAlignVertical="top"
+            placeholder="把 104、1111 App 的分享連結，或 Facebook 社團上的職缺整段貼進來…"
+            placeholderTextColor={colors.placeholder}
+            style={[styles.input, styles.textArea, busy && { opacity: 0.6 }]}
+          />
 
           {detectedLink ? (
             <View style={styles.linkHint} accessible accessibilityLabel={`偵測到${jobSiteName(detectedLink)}職缺網址，會直接讀取這份職缺`}>
@@ -498,15 +478,9 @@ export default function HomeScreen() {
 
           <View style={styles.actions}>
             <View style={{ flex: 1 }}>
-              {urlMode
-                ? <Button variant="white" icon="link" label="讀取這份職缺" loading={busy} disabled={Boolean(setupReason)} onPress={() => { void importUrl(); }} />
-                : <Button variant="white" icon={detectedLink ? 'link' : 'search'} label={detectedLink ? '讀取並檢查' : '開始檢查'} loading={busy}
-                    disabled={Boolean(setupReason)} onPress={startCheck} />}
+              <Button variant="white" icon={detectedLink ? 'link' : 'search'} label={detectedLink ? '讀取並檢查' : '開始檢查'} loading={busy}
+                disabled={Boolean(setupReason)} onPress={startCheck} />
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel={urlMode ? '改回貼上文字' : '改用職缺網址'} accessibilityState={{ selected: urlMode }}
-              onPress={() => setMode(urlMode ? 'text' : 'url')} style={({ pressed }) => [styles.modeBtn, urlMode && styles.modeBtnOn, pressed && { opacity: 0.8 }]}>
-              <Ionicons name={urlMode ? 'document-text' : 'link'} size={22} color={urlMode ? colors.primary : '#FFFFFF'} />
-            </Pressable>
             <Pressable accessibilityRole="button" accessibilityLabel="拍照或選擇職缺截圖" onPress={pickImage} disabled={busy}
               style={({ pressed }) => [styles.modeBtn, pressed && { opacity: 0.8 }]}>
               <Ionicons name="camera" size={22} color="#FFFFFF" />
@@ -605,13 +579,11 @@ const styles = StyleSheet.create({
   pasteCard: { backgroundColor: colors.primary, borderRadius: radius.xxl, padding: 18, gap: 14, ...shadow.coral },
   input: { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: 14, fontSize: 15, lineHeight: 22, color: colors.text },
   textArea: { minHeight: 96, maxHeight: 220, paddingTop: 12, paddingBottom: 12 },
-  urlInput: { minHeight: 54 },
   linkHint: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: onBrand.chip, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 8 },
   sourceBox: { backgroundColor: colors.surface, borderRadius: radius.md, padding: space.md, gap: 4 },
   sourceHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   modeBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: onBrand.chip, alignItems: 'center', justifyContent: 'center' },
-  modeBtnOn: { backgroundColor: colors.surface },
   quota: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   quotaTrack: { width: 72, height: 6, borderRadius: 3, backgroundColor: onBrand.track, overflow: 'hidden' },
   quotaFill: { height: 6, borderRadius: 3, backgroundColor: '#FFFFFF' },

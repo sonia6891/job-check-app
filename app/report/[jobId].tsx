@@ -18,6 +18,7 @@ import { buildChecklist, friendlyVerdict, missingLabel, type CheckItem, type Che
 import { monthlyDaysOff, salaryScale, shiftBreakdown } from '@/src/lib/reportVisuals';
 import { InterviewNotesList } from '@/src/components/InterviewNotesList';
 import { OfficialRecordCard } from '@/src/components/OfficialRecordCard';
+import { reportBadges, verdictLevel } from '@/src/lib/reportBadges';
 import { RiskHintCard } from '@/src/components/RiskHintCard';
 import { EmployerPicker } from '@/src/components/EmployerPicker';
 import { ShareCardSheet } from '@/src/components/ShareCardSheet';
@@ -320,6 +321,8 @@ export default function ReportScreen() {
   const generated = report.generated_at ? `${Number(report.generated_at.slice(5, 7))}/${Number(report.generated_at.slice(8, 10))}` : null;
   const employment = report.job.employment_type ? employmentLabels[report.job.employment_type] ?? report.job.employment_type : null;
   const overview = checklist.filter(item => item.key !== 'risks');
+  const level = verdictLevel(verdict.tone);
+  const badges = reportBadges(report);
 
   const actionBar = (
     <View style={styles.actionBar}>
@@ -570,7 +573,13 @@ export default function ReportScreen() {
   return (
     <Screen safeTop scrollRef={scrollRef} header={topBar(() => setShareOpen(true))} footer={actionBar}>
       <View style={styles.verdict}>
-        <Chip tone="white" label={`體檢結果${generated ? `・${generated}` : ''}`} />
+        <View style={styles.chipRow}>
+          <View style={[styles.level, { backgroundColor: toneStyles[level.tone].bar }]} accessible accessibilityLabel={`風險燈號：${level.label}`}>
+            <Ionicons name={toneStyles[level.tone].icon as IconName} size={15} color="#FFFFFF" />
+            <T variant="captionStrong" color="#FFFFFF">{level.label}</T>
+          </View>
+          <Chip tone="white" label={`體檢結果${generated ? `・${generated}` : ''}`} />
+        </View>
         <T variant="title" accessibilityRole="header">{verdict.text}</T>
         <T variant="body" color={colors.textBody}>{[report.job.title || '未命名職缺', report.job.display_company_name || '公司待確認'].join('・')}</T>
         {report.job.location || report.job.work_hours || employment || daysOffSource ? (
@@ -578,6 +587,18 @@ export default function ReportScreen() {
             {[report.job.location, hoursWithoutDaysOff(report.job.work_hours, daysOffSource), employment, daysOffSource].filter((c): c is string => !!c).map(c => <Chip key={c} tone="white" label={c} />)}
           </View>
         ) : null}
+        {/* 公司身分與勞動部紀錄是這個 App 和求職網站不一樣的地方，放在第一屏。 */}
+        <View style={{ gap: 8 }}>
+          {badges.map(b => (
+            <Pressable key={b.key} accessibilityRole="button" accessibilityLabel={`${b.label}，看詳細`} onPress={() => jumpTo(b.section)}
+              style={({ pressed }) => [styles.badge, pressed && { opacity: 0.8 }]}>
+              <Ionicons name={(b.key === 'identity' ? (b.tone === 'ok' ? 'shield-checkmark' : 'business') : 'document-text') as IconName} size={18}
+                color={b.tone === 'neutral' ? colors.textMuted : toneStyles[b.tone].iconColor} />
+              <T variant="captionStrong" color={b.tone === 'neutral' ? colors.textBody : toneStyles[b.tone].fg} style={{ flex: 1 }} numberOfLines={2}>{b.label}</T>
+              <Ionicons name="chevron-forward" size={16} color={colors.placeholder} />
+            </Pressable>
+          ))}
+        </View>
       </View>
 
       {correctedFields.length ? (
@@ -661,6 +682,8 @@ const styles = StyleSheet.create({
   emptyActions: { alignSelf: 'stretch', gap: space.sm, marginTop: space.sm },
   skeleton: { height: 140, borderRadius: radius.xl, backgroundColor: colors.neutralSoft },
   verdict: { backgroundColor: colors.verdict, borderRadius: radius.xxl, padding: space.xl, gap: space.md },
+  level: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.surface, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   section: { gap: space.md },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
