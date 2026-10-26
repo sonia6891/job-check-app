@@ -17,6 +17,7 @@ import { showMessage } from '@/src/lib/uiAlerts';
 import { paymentsEnabled, usePlan } from '@/src/lib/plan';
 import { relativeDay } from '@/src/lib/myJobs';
 import { findJobUrl, isShareOnlyText, jobSiteName } from '@/src/lib/jobLinks';
+import { job104ApiUrl, job104Id, job104PageUrl, jobTextFrom104 } from '@/src/lib/job104Sites';
 
 type PendingOcr = {
   assetUri: string;
@@ -37,6 +38,36 @@ const TIPS = [
   '每 7 天要有 2 天休假，一個月大約 8 天。',
   '雇主不能預扣薪水當違約金或賠償。'
 ];
+
+/**
+ * 104 職缺直接用手機讀：職缺頁背後的資料網址（見 job104Sites.ts），手機的網路比較不會被擋，
+ * 也不用等後端 import-job-url 更新。讀不到回 null，改交給後端。網頁版有 CORS 限制，不在這裡讀。
+ */
+async function readJob104OnDevice(id: string) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(job104ApiUrl(id), {
+      headers: { Accept: 'application/json', Referer: job104PageUrl(id) },
+      signal: controller.signal
+    });
+    if (!response.ok) return null;
+    const job = jobTextFrom104(await response.json());
+    return job && job.text.length >= 40 ? job : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function job104IdOf(url: string) {
+  try {
+    return job104Id(new URL(url));
+  } catch {
+    return null;
+  }
+}
 
 function greeting(now: Date) {
   const h = now.getHours();
@@ -205,17 +236,27 @@ export default function HomeScreen() {
     try {
       const auth = await ensureGuestSession();
       if (!auth.ok) throw new Error(auth.reason);
-      const result = await api.importJobUrl(value);
-
-      if (result.status === 'parsed' && result.job_id) {
+      const openAnalysis = async (jobId: string) => {
         setJobUrl('');
         if (pastedText !== undefined) {
           setText('');
           setSourceUrl(null);
           await prefs.setDraft({ text: '', sourceUrl: null });
         }
-        router.push(`/analysis/${result.job_id}`);
-        return;
+        router.push(`/analysis/${jobId}`);
+      };
+
+      const id104 = Platform.OS === 'web' ? null : job104IdOf(value);
+      const onDevice = id104 ? await readJob104OnDevice(id104) : null;
+      if (id104 && onDevice) {
+        const parsed = await api.parseTextJob(onDevice.text, null, undefined, job104PageUrl(id104), onDevice.company, onDevice.title);
+        if (parsed.job_id) return await openAnalysis(parsed.job_id);
+      }
+
+      const result = await api.importJobUrl(value);
+
+      if (result.status === 'parsed' && result.job_id) {
+        return await openAnalysis(result.job_id);
       }
 
       const reasonText: Record<string, string> = {

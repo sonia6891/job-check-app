@@ -12,13 +12,14 @@ async function invoke<T>(name: string, body: Record<string, unknown>): Promise<T
 }
 
 export const api = {
-  parseTextJob: (text: string, jobPostId?: string | null, fileMeta?: { fileId?: string; engine?: string; language?: string; confidence?: number }, sourceUrl?: string | null, companyName?: string | null) =>
+  parseTextJob: (text: string, jobPostId?: string | null, fileMeta?: { fileId?: string; engine?: string; language?: string; confidence?: number }, sourceUrl?: string | null, companyName?: string | null, jobTitle?: string | null) =>
     invoke<JobParseResult>('parse-job', {
       text,
       source_type: jobPostId ? 'image' : sourceUrl ? 'url' : 'text',
       source_url: sourceUrl ?? null,
       // 使用者在核對視窗改過的公司名稱；沒改就讓後端自己從文字找。
       company_name: companyName?.trim() || undefined,
+      job_title: jobTitle?.trim() || undefined,
       job_post_id: jobPostId ?? null,
       file_id: fileMeta?.fileId ?? null,
       ocr_engine: fileMeta?.engine ?? null,
