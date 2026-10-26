@@ -7,6 +7,7 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { api } from '@/src/lib/api';
 import { ensureGuestSession, supabase } from '@/src/lib/supabase';
 import { recognizeTextFromImages, type OcrResult } from '@/src/lib/ocr';
+import { companyFromScreenshot, joinWrappedCompanyLines } from '@/src/lib/ocrCompany';
 import { prefs } from '@/src/lib/prefs';
 import { SetupBanner } from '@/src/components/SetupBanner';
 import { JobTextReview } from '@/src/components/JobTextReview';
@@ -339,8 +340,15 @@ export default function HomeScreen() {
       // OCR is local; no upload or analysis row until the user confirms the text.
       // 多張截圖只上傳第一張當作來源紀錄，分析用的是接起來的全部文字。
       const result = await recognizeTextFromImages(picked.assets.map(a => ({ uri: a.uri, width: a.width, height: a.height })));
-      setPendingOcr({ assetUri: asset.uri, mimeType: asset.mimeType ?? 'image/jpeg', filename: asset.fileName ?? null, result });
-      setOcrText(result.text);
+      // 折成兩行的公司名稱先接回來，並在手機上找好公司名稱明確送出（線上的解析規則認不出斷行的名稱）。
+      const text = joinWrappedCompanyLines(result.text);
+      const found = companyFromScreenshot(text);
+      setPendingOcr({ assetUri: asset.uri, mimeType: asset.mimeType ?? 'image/jpeg', filename: asset.fileName ?? null, result: { ...result, text } });
+      setOcrText(text);
+      if (found) {
+        setReviewCompany(found);
+        setCompanyTouched(true);
+      }
     } catch (e: any) {
       if (String(e?.message) === 'native_ocr_requires_development_build') {
         showMessage('需要原生測試版', '本機 OCR 需要原生版本，網頁版可先使用貼上文字。');
