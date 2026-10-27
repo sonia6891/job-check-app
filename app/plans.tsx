@@ -93,7 +93,8 @@ export default function PlansScreen() {
       else showMessage('付款完成，正在開通', 'App Store 已完成付款，Pro 通常幾分鐘內就會開通。如果一直沒有開通，請回這裡按「恢復購買」。');
     } catch (e: any) {
       if (e?.userCancelled) return;
-      showMessage('購買沒有完成', e?.message ?? '請稍後再試。');
+      const charged = String(e?.message ?? '').startsWith('付款已完成');
+      showMessage(charged ? '付款完成，正在開通' : '購買沒有完成', e?.message ?? '請稍後再試。');
     } finally {
       setBusy(null);
     }

@@ -75,8 +75,9 @@ export const api = {
     }),
 
   // StoreKit 2 的交易（JWS）交給後端驗證，記到目前帳號並重算方案。
-  verifyAppStoreTransaction: (signedTransaction: string) =>
-    invoke<{ status: string; plan: 'pro' | 'free' | null; product_id: string; expires_at: string | null }>('verify-app-store-transaction', { signedTransaction }),
+  // restore：使用者按了「恢復購買」，別的正式帳號的訂閱才會移到這個帳號。
+  verifyAppStoreTransaction: (signedTransaction: string, restore = false) =>
+    invoke<{ status: string; plan: 'pro' | 'free' | null; reason: string | null; product_id: string; expires_at: string | null }>('verify-app-store-transaction', { signedTransaction, restore }),
 
   appHealth: () =>
     invoke<any>('app-health', {}),

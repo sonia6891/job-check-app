@@ -32,9 +32,9 @@ let currentUserId: string | null = null;
 const waiting = new Map<string, { resolve: (isPro: boolean) => void; reject: (e: unknown) => void }>();
 
 /** 交給後端驗證；後端確認了才結束交易，失敗的話 StoreKit 下次啟動會再送一次。 */
-async function verifyAndFinish(purchase: Purchase) {
+async function verifyAndFinish(purchase: Purchase, restore = false) {
   if (!purchase.purchaseToken || !SKUS.includes(purchase.productId)) return false;
-  const result = await api.verifyAppStoreTransaction(purchase.purchaseToken);
+  const result = await api.verifyAppStoreTransaction(purchase.purchaseToken, restore);
   await finishTransaction({ purchase, isConsumable: false });
   return result.plan === 'pro';
 }
@@ -48,7 +48,12 @@ function connect() {
         const pending = waiting.get(purchase.productId);
         void verifyAndFinish(purchase).then(
           isPro => { waiting.delete(purchase.productId); pending?.resolve(isPro); },
-          error => { waiting.delete(purchase.productId); pending?.reject(error); }
+          // Apple 已經扣款了，只是後端還沒確認；交易沒結束，下次啟動或按恢復購買會再送。
+          error => {
+            waiting.delete(purchase.productId);
+            console.warn('verify-app-store-transaction', error);
+            pending?.reject(new Error('付款已完成，正在確認訂閱。請稍後再打開 App，或在方案頁按「恢復購買」。'));
+          }
         );
       });
       purchaseErrorListener(error => {
@@ -65,13 +70,20 @@ function connect() {
 }
 
 /** 把這個 Apple ID 目前有效的 Pro 交易送給後端，記到目前登入的帳號。 */
-async function syncToCurrentAccount() {
+async function syncToCurrentAccount(restore: boolean) {
   await connect();
   const purchases = await getAvailablePurchases({ onlyIncludeActiveItemsIOS: true });
   let isPro = false;
+  let failure: unknown = null;
   for (const purchase of purchases) {
-    if (SKUS.includes(purchase.productId) && await verifyAndFinish(purchase)) isPro = true;
+    if (!SKUS.includes(purchase.productId)) continue;
+    try {
+      if (await verifyAndFinish(purchase, restore)) isPro = true;
+    } catch (error) {
+      failure = error;
+    }
   }
+  if (!isPro && failure) throw failure;
   return isPro;
 }
 
@@ -127,11 +139,11 @@ export const billing = {
   // 訪客買了 Pro 再登入正式帳號時，把訂閱移到新帳號，之後的續訂才會記在新帳號。
   async syncPurchases() {
     if (!billingConfigured) return;
-    await syncToCurrentAccount();
+    await syncToCurrentAccount(false);
   },
 
   async restore() {
     if (!billingConfigured) throw new Error('購買功能還沒設定好。');
-    return { isPro: await syncToCurrentAccount() };
+    return { isPro: await syncToCurrentAccount(true) };
   }
 };
