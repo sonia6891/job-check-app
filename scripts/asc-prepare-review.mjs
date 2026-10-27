@@ -1,6 +1,6 @@
 // 把「職缺體檢」1.0.0 在 App Store Connect 上送審前要的東西補齊（不會送審）：
 //   1. 選好 TestFlight 建置（BUILD_NUMBER）；
-//   2. 審查聯絡人從「喵的，又要上班了」複製過來（同一位開發者，值不印出來）；版權寫開發者本名的英文（和 App Store 上的開發者名稱同一個拼法）；
+//   2. 審查聯絡人和版權從「喵的，又要上班了」複製過來（同一位開發者，版權寫本名；聯絡人的值不印出來）；
 //   3. 上傳 store/app-store-screenshots 的 6.9 吋、6.3 吋預覽圖到繁體中文；
 //   4. 兩個訂閱各上傳一張審查截圖（store/app-store-screenshots/訂閱審查用-Pro方案.png）。
 // APPLY=1 才會寫入；沒設時只列出會做什麼。已經有的東西跳過，可以重跑。
@@ -82,7 +82,8 @@ for (const v of meowVersions) {
 }
 if (!source) throw new Error('No complete review contact on the meow app');
 
-const copyright = '2026 Wang Pei Syuan';
+const copyright = meowVersions.map((v) => v.attributes.copyright).find(Boolean);
+if (!copyright) throw new Error('No copyright on the meow app');
 log('COPYRIGHT', { current: version.attributes.copyright, want: copyright });
 if (APPLY && version.attributes.copyright !== copyright) {
   await api('PATCH', `/v1/appStoreVersions/${version.id}`, { data: { type: 'appStoreVersions', id: version.id, attributes: { copyright } } });
