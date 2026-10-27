@@ -2,8 +2,11 @@
 //   1. 選好 TestFlight 建置（BUILD_NUMBER）；
 //   2. 審查聯絡人和版權從「喵的，又要上班了」複製過來（同一位開發者，版權寫本名；聯絡人的值不印出來）；
 //   3. 上傳 store/app-store-screenshots 的 6.9 吋、6.3 吋預覽圖到繁體中文；
-//   4. 兩個訂閱各上傳一張審查截圖（store/app-store-screenshots/訂閱審查用-Pro方案.png）。
+//   4. 兩個訂閱各上傳一張審查截圖（store/app-store-screenshots/訂閱審查用-Pro方案.png）；
+//   5. 副標題、宣傳文字、描述照 store/listing-zh-Hant.json 更新。
 // APPLY=1 才會寫入；沒設時只列出會做什麼。已經有的東西跳過，可以重跑。
+// REPLACE_SCREENSHOTS=1：先刪掉已上傳的預覽圖再重傳（換新版宣傳圖時用）。
+// SUBMIT=1（要和 APPLY=1 一起）：最後把訂閱和這個版本送審。
 import { createHash, createPrivateKey, sign } from 'node:crypto';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -13,6 +16,9 @@ const MEOW_APP_ID = '6817588985';
 const VERSION = '1.0.0';
 const BUILD_NUMBER = process.env.BUILD_NUMBER || '';
 const APPLY = process.env.APPLY === '1';
+const REPLACE_SCREENSHOTS = process.env.REPLACE_SCREENSHOTS === '1';
+const SUBMIT = APPLY && process.env.SUBMIT === '1';
+const LISTING = JSON.parse(readFileSync('store/listing-zh-Hant.json', 'utf8'));
 const SHOTS = 'store/app-store-screenshots';
 // 1320×2868 放 6.9 吋（API 名稱沿用 APP_IPHONE_67），1206×2622 放 6.3 吋（APP_IPHONE_61）。
 const SCREENSHOT_SETS = [['6.9吋', 'APP_IPHONE_67'], ['6.3吋', 'APP_IPHONE_61']];
@@ -103,14 +109,29 @@ const sets = (await get(`/v1/appStoreVersionLocalizations/${loc.id}/appScreensho
 for (const [folder, displayType] of SCREENSHOT_SETS) {
   const files = readdirSync(join(SHOTS, folder)).filter((f) => f.endsWith('.png')).sort().map((f) => join(SHOTS, folder, f));
   let set = sets.find((s) => s.attributes.screenshotDisplayType === displayType);
-  const have = set?.relationships?.appScreenshots?.data?.length ?? 0;
-  log('SCREENSHOTS', { displayType, files: files.length, have });
+  let have = set?.relationships?.appScreenshots?.data?.length ?? 0;
+  log('SCREENSHOTS', { displayType, files: files.length, have, replace: REPLACE_SCREENSHOTS });
+  if (APPLY && REPLACE_SCREENSHOTS && have) {
+    for (const old of set.relationships.appScreenshots.data) await api('DELETE', `/v1/appScreenshots/${old.id}`);
+    have = 0;
+  }
   if (!APPLY || have >= files.length) continue;
   if (!set) set = (await api('POST', '/v1/appScreenshotSets', { data: { type: 'appScreenshotSets', attributes: { screenshotDisplayType: displayType }, relationships: { appStoreVersionLocalization: { data: { type: 'appStoreVersionLocalizations', id: loc.id } } } } })).data;
   for (const f of files.slice(have)) {
     await upload('appScreenshots', {}, { appScreenshotSet: { data: { type: 'appScreenshotSets', id: set.id } } }, f);
     console.log('UPLOADED', f, statSync(f).size);
   }
+}
+
+// 5. 商店文字
+log('LISTING', { subtitle: LISTING.subtitle, promotionalText: LISTING.promotionalText.length, description: LISTING.description.length });
+if (APPLY) {
+  await api('PATCH', `/v1/appStoreVersionLocalizations/${loc.id}`, { data: { type: 'appStoreVersionLocalizations', id: loc.id, attributes: { description: LISTING.description, promotionalText: LISTING.promotionalText } } });
+  const infos = (await get(`/v1/apps/${app.id}/appInfos`)).data;
+  const info = infos.find((i) => ['PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJECTED', 'WAITING_FOR_REVIEW'].includes(i.attributes.appStoreState ?? i.attributes.state)) || infos[0];
+  const infoLoc = (await get(`/v1/appInfos/${info.id}/appInfoLocalizations`)).data.find((l) => l.attributes.locale === 'zh-Hant');
+  if (!infoLoc) throw new Error('zh-Hant app info localization missing');
+  await api('PATCH', `/v1/appInfoLocalizations/${infoLoc.id}`, { data: { type: 'appInfoLocalizations', id: infoLoc.id, attributes: { subtitle: LISTING.subtitle } } });
 }
 
 // 4. 訂閱審查截圖
@@ -123,5 +144,21 @@ for (const g of groups) {
     log('SUBSCRIPTION', { productId: s.attributes.productId, state: s.attributes.state, reviewScreenshot: !!shot, locales: locales.map((l) => ({ locale: l.attributes.locale, name: l.attributes.name, description: l.attributes.description })) });
     if (APPLY && !shot) await upload('subscriptionAppStoreReviewScreenshots', {}, { subscription: { data: { type: 'subscriptions', id: s.id } } }, SUBSCRIPTION_SHOT);
   }
+}
+// 6. 送審：第一次的訂閱要跟著 App 版本一起送，先把訂閱交出去，再送版本。
+if (SUBMIT) {
+  for (const g of groups) {
+    for (const s of (await get(`/v1/subscriptionGroups/${g.id}/subscriptions`)).data) {
+      if (s.attributes.state !== 'READY_TO_SUBMIT') continue;
+      await api('POST', '/v1/subscriptionSubmissions', { data: { type: 'subscriptionSubmissions', relationships: { subscription: { data: { type: 'subscriptions', id: s.id } } } } });
+      log('SUBSCRIPTION_SUBMITTED', { productId: s.attributes.productId });
+    }
+  }
+  const open = (await get(`/v1/apps/${app.id}/reviewSubmissions?filter[platform]=IOS&filter[state]=READY_FOR_REVIEW,UNRESOLVED_ISSUES`)).data;
+  const submission = open[0] || (await api('POST', '/v1/reviewSubmissions', { data: { type: 'reviewSubmissions', attributes: { platform: 'IOS' }, relationships: { app: { data: { type: 'apps', id: app.id } } } } })).data;
+  const items = (await get(`/v1/reviewSubmissions/${submission.id}/items`)).data;
+  if (!items.length) await api('POST', '/v1/reviewSubmissionItems', { data: { type: 'reviewSubmissionItems', relationships: { reviewSubmission: { data: { type: 'reviewSubmissions', id: submission.id } }, appStoreVersion: { data: { type: 'appStoreVersions', id: version.id } } } } });
+  const done = (await api('PATCH', `/v1/reviewSubmissions/${submission.id}`, { data: { type: 'reviewSubmissions', id: submission.id, attributes: { submitted: true } } })).data;
+  log('SUBMITTED', { submission: done.id, state: done.attributes.state });
 }
 console.log(APPLY ? 'APPLIED' : 'DRY_RUN (set APPLY=1 to write)');

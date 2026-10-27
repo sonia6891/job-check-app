@@ -11,6 +11,16 @@ on:
         required: false
         default: false
         type: boolean
+      replace_screenshots:
+        description: Delete uploaded screenshots and upload the current ones again
+        required: false
+        default: false
+        type: boolean
+      submit:
+        description: Submit the subscriptions and this version for review (needs apply)
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
 jobs:
@@ -26,6 +36,8 @@ jobs:
         env:
           BUILD_NUMBER: ${{ inputs.build_number }}
           APPLY: ${{ inputs.apply && '1' || '' }}
+          REPLACE_SCREENSHOTS: ${{ inputs.replace_screenshots && '1' || '' }}
+          SUBMIT: ${{ inputs.submit && '1' || '' }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID || secrets.APPLE_ASC_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID || secrets.APPLE_ASC_ISSUER_ID }}
           APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 || secrets.APPLE_ASC_KEY_P8 }}
