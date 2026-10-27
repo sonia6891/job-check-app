@@ -6,5 +6,5 @@
 export const FREE_MONTHLY_LIMIT = 5;
 export const PRO_MONTHLY_LIMIT = 300;
 
-/** 購買功能還沒開（建置沒有 RevenueCat 金鑰）時，後端仍是全免費、每月 30 次（20261017100000_free_for_everyone）。 */
+/** 購買功能還沒開（網頁、Android）時，後端仍是全免費、每月 30 次（20261017100000_free_for_everyone）。 */
 export const LEGACY_MONTHLY_LIMIT = 30;

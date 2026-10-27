@@ -1,96 +1,137 @@
 import { Platform } from 'react-native';
-import Purchases, { LOG_LEVEL, type CustomerInfo, type PurchasesPackage } from 'react-native-purchases';
+import {
+  ErrorCode,
+  fetchProducts,
+  finishTransaction,
+  getAvailablePurchases,
+  initConnection,
+  purchaseErrorListener,
+  purchaseUpdatedListener,
+  requestPurchase,
+  type Purchase
+} from 'expo-iap';
+import { api } from './api';
 
 /**
- * Pro 訂閱（RevenueCat）。月費 NT$60、年費 NT$590，商品在 App Store Connect 建立，
- * RevenueCat 的 entitlement「pro」對應這兩個商品。公開 SDK 金鑰放在建置環境變數（不是秘密）。
- * 購買後 RevenueCat 會呼叫 Supabase 的 revenuecat-webhook 更新 profiles.plan，後端額度以那邊為準。
+ * Pro 訂閱（月費 NT$60、年費 NT$590），和「喵的又要上班了」一樣直接用 Apple StoreKit 2，不經過 RevenueCat。
+ * 買完把 Apple 簽章的交易（JWS）送到後端 verify-app-store-transaction 驗證並寫進 profiles.plan，
+ * 後端確認後才 finishTransaction；續訂、到期、退款由 Apple 直接通知後端 app-store-notifications。
+ * 購買時帶 appAccountToken（Supabase 使用者 ID），Apple 的通知才知道是哪個帳號。
  */
-const IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? '';
-const ANDROID_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? '';
-const PRO_ENTITLEMENT = process.env.EXPO_PUBLIC_REVENUECAT_PRO_ENTITLEMENT_ID || 'pro';
+export const PRODUCT_IDS = { MONTHLY: 'jobcheck_pro_monthly', ANNUAL: 'jobcheck_pro_yearly' } as const;
+export type ProPlanType = keyof typeof PRODUCT_IDS;
+export type ProPackage = { type: ProPlanType; sku: string; priceString: string; price: number | null };
 
-let configured = false;
-let currentAppUserId: string | null = null;
+const SKUS: string[] = Object.values(PRODUCT_IDS);
 
-function platformKey() {
-  if (Platform.OS === 'ios') return IOS_KEY;
-  if (Platform.OS === 'android') return ANDROID_KEY;
-  return '';
+export const billingConfigured = Platform.OS === 'ios';
+
+let connected: Promise<boolean> | null = null;
+let currentUserId: string | null = null;
+// 正在購買的商品：購買結果從 listener 回來後交給等著的 purchase()。
+const waiting = new Map<string, { resolve: (isPro: boolean) => void; reject: (e: unknown) => void }>();
+
+/** 交給後端驗證；後端確認了才結束交易，失敗的話 StoreKit 下次啟動會再送一次。 */
+async function verifyAndFinish(purchase: Purchase) {
+  if (!purchase.purchaseToken || !SKUS.includes(purchase.productId)) return false;
+  const result = await api.verifyAppStoreTransaction(purchase.purchaseToken);
+  await finishTransaction({ purchase, isConsumable: false });
+  return result.plan === 'pro';
 }
 
-function isPro(info: CustomerInfo | null | undefined) {
-  return Boolean(info?.entitlements.active?.[PRO_ENTITLEMENT]);
+function connect() {
+  if (!connected) {
+    connected = (async () => {
+      await initConnection();
+      // 購買、續訂、家長同意後才完成的購買、上次沒處理完的交易，都從這裡進來。
+      purchaseUpdatedListener(purchase => {
+        const pending = waiting.get(purchase.productId);
+        void verifyAndFinish(purchase).then(
+          isPro => { waiting.delete(purchase.productId); pending?.resolve(isPro); },
+          error => { waiting.delete(purchase.productId); pending?.reject(error); }
+        );
+      });
+      purchaseErrorListener(error => {
+        const key = error.productId && waiting.has(error.productId) ? error.productId : [...waiting.keys()][0];
+        const pending = key ? waiting.get(key) : undefined;
+        if (!pending || !key) return;
+        waiting.delete(key);
+        pending.reject(error.code === ErrorCode.UserCancelled ? { userCancelled: true } : new Error(error.message || '購買沒有完成。'));
+      });
+      return true;
+    })().catch(error => { connected = null; throw error; });
+  }
+  return connected;
 }
 
-export const billingConfigured = Boolean(platformKey());
+/** 把這個 Apple ID 目前有效的 Pro 交易送給後端，記到目前登入的帳號。 */
+async function syncToCurrentAccount() {
+  await connect();
+  const purchases = await getAvailablePurchases({ onlyIncludeActiveItemsIOS: true });
+  let isPro = false;
+  for (const purchase of purchases) {
+    if (SKUS.includes(purchase.productId) && await verifyAndFinish(purchase)) isPro = true;
+  }
+  return isPro;
+}
 
 export const billing = {
-  entitlementId: PRO_ENTITLEMENT,
-
   async configure(appUserId: string) {
-    const apiKey = platformKey();
-    if (!apiKey) return { configured: false as const };
-
-    if (!configured) {
-      if (__DEV__) void Purchases.setLogLevel(LOG_LEVEL.DEBUG);
-      Purchases.configure({ apiKey, appUserID: appUserId });
-      configured = true;
-      currentAppUserId = appUserId;
-      return { configured: true as const };
-    }
-
-    if (currentAppUserId !== appUserId) {
-      await Purchases.logIn(appUserId);
-      currentAppUserId = appUserId;
-    }
+    if (!billingConfigured) return { configured: false as const };
+    currentUserId = appUserId;
+    await connect();
     return { configured: true as const };
   },
 
   async identify(appUserId: string) {
     const result = await this.configure(appUserId);
-    if (!result.configured) return null;
-    return Purchases.getCustomerInfo();
+    return result.configured ? true : null;
   },
 
   async logOut() {
-    if (!configured) return;
-    try {
-      await Purchases.logOut();
-      currentAppUserId = null;
-    } catch {
-      // 匿名身分登出會丟錯，不影響切換帳號。
-    }
+    currentUserId = null;
   },
 
+  /** 這個 Apple ID 有沒有有效的 Pro（不經後端，只問 StoreKit）。 */
   async getStatus() {
-    if (!configured) return { configured: false as const, isPro: false, customerInfo: null };
-    const customerInfo = await Purchases.getCustomerInfo();
-    return { configured: true as const, isPro: isPro(customerInfo), customerInfo };
+    if (!billingConfigured) return { configured: false as const, isPro: false };
+    await connect();
+    const purchases = await getAvailablePurchases({ onlyIncludeActiveItemsIOS: true });
+    return { configured: true as const, isPro: purchases.some(p => SKUS.includes(p.productId)) };
   },
 
-  async getProPackages(): Promise<PurchasesPackage[]> {
-    if (!configured) return [];
-    const offerings = await Purchases.getOfferings();
-    return offerings.current?.availablePackages ?? [];
+  async getProPackages(): Promise<ProPackage[]> {
+    if (!billingConfigured) return [];
+    await connect();
+    const products = (await fetchProducts({ skus: SKUS, type: 'subs' })) ?? [];
+    return (Object.keys(PRODUCT_IDS) as ProPlanType[]).flatMap(type => {
+      const product = products.find(p => p.id === PRODUCT_IDS[type]);
+      return product ? [{ type, sku: product.id, priceString: product.displayPrice, price: product.price ?? null }] : [];
+    });
   },
 
-  async purchase(pkg: PurchasesPackage) {
-    if (!configured) throw new Error('購買功能還沒設定好。');
-    const result = await Purchases.purchasePackage(pkg);
-    return { ...result, isPro: isPro(result.customerInfo) };
+  async purchase(pkg: ProPackage) {
+    if (!billingConfigured || !currentUserId) throw new Error('購買功能還沒設定好。');
+    await connect();
+    const done = new Promise<boolean>((resolve, reject) => waiting.set(pkg.sku, { resolve, reject }));
+    try {
+      await requestPurchase({ request: { apple: { sku: pkg.sku, appAccountToken: currentUserId } }, type: 'subs' });
+    } catch (error: any) {
+      waiting.delete(pkg.sku);
+      if (error?.code === ErrorCode.UserCancelled) throw { userCancelled: true };
+      throw error;
+    }
+    return { isPro: await done };
   },
 
-  // 訪客買了 Pro 再登入正式帳號時，把 App Store 收據移到新帳號（RevenueCat 會送 TRANSFER 給後端），
-  // 之後的續訂才會記在新帳號。沒有購買紀錄時什麼都不做，也不會跳出 Apple ID 登入。
+  // 訪客買了 Pro 再登入正式帳號時，把訂閱移到新帳號，之後的續訂才會記在新帳號。
   async syncPurchases() {
-    if (!configured) return;
-    await Purchases.syncPurchases();
+    if (!billingConfigured) return;
+    await syncToCurrentAccount();
   },
 
   async restore() {
-    if (!configured) throw new Error('購買功能還沒設定好。');
-    const customerInfo = await Purchases.restorePurchases();
-    return { customerInfo, isPro: isPro(customerInfo) };
+    if (!billingConfigured) throw new Error('購買功能還沒設定好。');
+    return { isPro: await syncToCurrentAccount() };
   }
 };

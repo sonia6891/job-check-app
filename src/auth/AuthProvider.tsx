@@ -48,7 +48,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!mounted) return;
       setSession(nextSession);
-      // 訂閱跟著目前的帳號（訪客也算）；RevenueCat 失敗不影響登入。
+      // 訂閱跟著目前的帳號（訪客也算）；購買功能失敗不影響登入。
       if (nextSession?.user) void billing.identify(nextSession.user.id).catch(() => {});
     });
 

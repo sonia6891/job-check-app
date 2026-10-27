@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, TextInput, V
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import { CatBriefcaseArt } from '@/src/components/CatBriefcaseArt';
 import { api } from '@/src/lib/api';
 import { ensureGuestSession, supabase } from '@/src/lib/supabase';
 import { recognizeTextFromImages, type OcrResult } from '@/src/lib/ocr';
@@ -72,24 +72,6 @@ function job104IdOf(url: string) {
 function greeting(now: Date) {
   const h = now.getHours();
   return h < 11 ? '早安！' : h < 18 ? '午安！' : '晚安！';
-}
-
-/** 頁首右側的小插圖：和 App 圖示同一個公文包加心跳線（assets/brand/app-icon.svg）。 */
-function BriefcaseArt() {
-  return (
-    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-    <Svg width={120} height={108} viewBox="0 0 120 108">
-      <Path d="M44 26v-5a6 6 0 0 1 6-6h16a6 6 0 0 1 6 6v5" fill="none" stroke={colors.text} strokeWidth={3} />
-      <Rect x={22} y={38} width={72} height={46} rx={9} fill="#FFFFFF" stroke={colors.text} strokeWidth={3} />
-      <Rect x={17} y={26} width={82} height={22} rx={9} fill="#FFFFFF" stroke={colors.text} strokeWidth={3} />
-      <Rect x={31} y={38} width={12} height={14} rx={3.5} fill={colors.accent} stroke={colors.text} strokeWidth={3} />
-      <Rect x={73} y={38} width={12} height={14} rx={3.5} fill={colors.accent} stroke={colors.text} strokeWidth={3} />
-      <Path d="M28 64h18l6-11 8 22 7-16 5 5h16" fill="none" stroke={colors.primary} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
-      <Circle cx={106} cy={20} r={5} fill={colors.primary} />
-      <Circle cx={10} cy={92} r={4} fill={colors.success} />
-    </Svg>
-    </View>
-  );
 }
 
 export default function HomeScreen() {
@@ -427,7 +409,7 @@ export default function HomeScreen() {
         <T variant="captionStrong" color={colors.primary}>{greeting(now)}</T>
         <T variant="display" accessibilityRole="header">想先檢查{'\n'}哪份工作？</T>
       </View>
-      <BriefcaseArt />
+      <CatBriefcaseArt />
     </View>
   );
 

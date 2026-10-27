@@ -17,6 +17,24 @@ let pendingGuestTransfer: PendingGuestTransfer | null = null;
 // Opaque transfer tokens are kept ONLY in memory. Never log or persist them as plaintext.
 let transferNotice: TransferNotice = { status: 'none', message: '' };
 
+/**
+ * 用 Apple 登入的帳號，刪除前再請 Apple 確認一次，拿授權碼給後端撤銷 Apple 登入（App Store 審核 5.1.1(v)）。
+ * 使用者取消就不刪除。
+ */
+async function appleCodeForDeletion(): Promise<string | undefined> {
+  if (Platform.OS !== 'ios') return undefined;
+  const { data } = await supabase.auth.getUser();
+  if (!data.user?.identities?.some(i => i.provider === 'apple')) return undefined;
+  if (!(await AppleAuthentication.isAvailableAsync())) return undefined;
+  try {
+    const credential = await AppleAuthentication.signInAsync({ requestedScopes: [] });
+    return credential.authorizationCode ?? undefined;
+  } catch (error: any) {
+    if (error?.code === 'ERR_REQUEST_CANCELED') throw new Error('已取消。刪除帳號前需要再用 Apple 確認一次。');
+    throw error;
+  }
+}
+
 async function restorePendingTransfer(): Promise<TransferNotice> {
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user || data.user.is_anonymous) return transferNotice;
@@ -152,7 +170,7 @@ async function finishPermanentSignIn(transfer: GuestTransfer | null) {
     await billing.identify(session.user.id);
     // 訪客時買的訂閱要跟著過來，不然續訂會記在已經不用的訪客身分。沒買過就不同步，免得搬走別的帳號的訂閱。
     if (transfer?.guestHadPro) await billing.syncPurchases();
-  } catch { /* RevenueCat 可稍後重試；方案頁也有「恢復購買」 */ }
+  } catch { /* 可稍後重試；方案頁也有「恢復購買」 */ }
   return session;
 }
 
@@ -289,7 +307,7 @@ export const authActions = {
 
   /** 刪除帳號與所有資料，之後換成全新的訪客身分；本機草稿也一併清除。 */
   async deleteAccount() {
-    await api.deleteAccount();
+    await api.deleteAccount(await appleCodeForDeletion());
     pendingGuestTransfer = null;
     transferNotice = { status: 'none', message: '' };
     await transferVault.clear().catch(() => {});

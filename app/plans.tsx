@@ -3,13 +3,11 @@ import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-n
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { PurchasesPackage } from 'react-native-purchases';
-import { billing, billingConfigured } from '@/src/lib/billing';
+import { billing, billingConfigured, type ProPackage } from '@/src/lib/billing';
 import { isProActive, usePlan } from '@/src/lib/plan';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { FREE_MONTHLY_LIMIT, PRO_MONTHLY_LIMIT } from '@/src/lib/usage';
 import { confirmAction, showMessage } from '@/src/lib/uiAlerts';
-import { api } from '@/src/lib/api';
 import { colors, gradient, onBrand, radius, space } from '@/src/theme/tokens';
 import { Button, Notice, Screen, Surface, T } from '@/src/ui';
 
@@ -28,11 +26,11 @@ const APPLE_EULA = 'https://www.apple.com/legal/internet-services/itunes/dev/std
 // 公開的隱私權政策網址（上架前要有）；還沒有時連到 App 內的「隱私與資料」說明。
 const PRIVACY_POLICY_URL = process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL ?? '';
 
-/** Pro 方案：月費 NT$60、年費 NT$590（RevenueCat）。詐騙警訊與違規紀錄對所有人都免費。 */
+/** Pro 方案：月費 NT$60、年費 NT$590（Apple 訂閱）。詐騙警訊與違規紀錄對所有人都免費。 */
 export default function PlansScreen() {
   const { user } = useAuth();
   const plan = usePlan();
-  const [packages, setPackages] = useState<PurchasesPackage[]>([]);
+  const [packages, setPackages] = useState<ProPackage[]>([]);
   const [selected, setSelected] = useState<'MONTHLY' | 'ANNUAL'>('ANNUAL');
   const [loading, setLoading] = useState(billingConfigured);
   const [busy, setBusy] = useState<'buy' | 'restore' | null>(null);
@@ -54,33 +52,25 @@ export default function PlansScreen() {
     return () => { active = false; };
   }, [user]);
 
-  const pkgFor = (type: 'MONTHLY' | 'ANNUAL') => packages.find(p => p.packageType === type);
-  const priceFor = (type: 'MONTHLY' | 'ANNUAL') => pkgFor(type)?.product.priceString ?? `NT$${FALLBACK_PRICES[type]}`;
+  const pkgFor = (type: 'MONTHLY' | 'ANNUAL') => packages.find(p => p.type === type);
+  const priceFor = (type: 'MONTHLY' | 'ANNUAL') => pkgFor(type)?.priceString ?? `NT$${FALLBACK_PRICES[type]}`;
 
   // 年費說明照商店實際價格算，價格改了或在其他地區也不會寫錯。
   function annualNote() {
-    const monthly = pkgFor('MONTHLY')?.product;
-    const annual = pkgFor('ANNUAL')?.product;
-    const fromStore = Boolean(monthly && annual);
-    const m = fromStore ? monthly!.price : FALLBACK_PRICES.MONTHLY;
-    const a = fromStore ? annual!.price : FALLBACK_PRICES.ANNUAL;
-    const perMonth = fromStore ? annual!.pricePerMonthString : `NT$${Math.round(a / 12)}`;
+    const monthly = pkgFor('MONTHLY')?.price;
+    const annual = pkgFor('ANNUAL')?.price;
+    const fromStore = monthly != null && annual != null;
+    const m = fromStore ? monthly! : FALLBACK_PRICES.MONTHLY;
+    const a = fromStore ? annual! : FALLBACK_PRICES.ANNUAL;
+    const perMonth = `NT$${Math.round(a / 12)}`;
     const save = m > 0 ? Math.round((1 - a / (m * 12)) * 100) : 0;
     return [perMonth ? `平均每月約 ${perMonth}` : '一次付一年', save > 0 ? `比月繳省約 ${save}%` : ''].filter(Boolean).join('，');
   }
 
-  // 購買後由 RevenueCat 通知後端開通，通常幾秒內完成；等不到就請後端直接向 RevenueCat 查一次
-  //（webhook 漏送、或恢復購買在 RevenueCat 端沒有新事件時的補救），之後再繼續等。
+  // 後端驗證完交易就已經寫好方案；這裡等畫面讀到最新的 profiles。
   const waitForPro = useCallback(async () => {
     for (let i = 0; i < 6; i++) {
       if (isProActive(await plan.refresh())) return true;
-      if (i === 1) {
-        try {
-          if (isProActive((await api.syncEntitlement()).profile)) { await plan.refresh(); return true; }
-        } catch {
-          // 後端還沒設定 RevenueCat 金鑰或暫時失敗，繼續等 webhook。
-        }
-      }
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
     return false;

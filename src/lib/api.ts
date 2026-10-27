@@ -67,12 +67,16 @@ export const api = {
       extracted_preview?: string;
     }>('import-job-url', { url }),
 
-  deleteAccount: () =>
-    invoke<{ status: 'deleted' }>('delete-account', { confirm: 'DELETE' }),
+  // appleAuthorizationCode：用 Apple 登入的帳號，刪除時一併撤銷 Apple 登入。
+  deleteAccount: (appleAuthorizationCode?: string) =>
+    invoke<{ status: 'deleted'; apple_revoked?: boolean }>('delete-account', {
+      confirm: 'DELETE',
+      ...(appleAuthorizationCode ? { apple_authorization_code: appleAuthorizationCode } : {})
+    }),
 
-  // 購買後等不到 webhook 開通時，請後端直接向 RevenueCat 查這個帳號的訂閱並寫進 profiles。
-  syncEntitlement: () =>
-    invoke<{ status: string; found: boolean; active: boolean; profile: { plan: string | null; plan_expire_at: string | null } | null }>('sync-entitlement', {}),
+  // StoreKit 2 的交易（JWS）交給後端驗證，記到目前帳號並重算方案。
+  verifyAppStoreTransaction: (signedTransaction: string) =>
+    invoke<{ status: string; plan: 'pro' | 'free' | null; product_id: string; expires_at: string | null }>('verify-app-store-transaction', { signedTransaction }),
 
   appHealth: () =>
     invoke<any>('app-health', {}),

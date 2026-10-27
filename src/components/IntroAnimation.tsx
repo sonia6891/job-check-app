@@ -18,7 +18,7 @@ const UNIT = (200 * 900) / 1024 / 778;
 const SIZE = VIEW.size * UNIT;
 // 公文包中心 (512, 508) 對齊螢幕中心，和啟動畫面一致。
 const OFFSET = { x: (VIEW.x + VIEW.size / 2 - 512) * UNIT, y: (VIEW.y + VIEW.size / 2 - 508) * UNIT };
-const DURATION = 4300;
+const DURATION = 4800;
 
 const ink = colors.text;
 const coral = colors.primary;
@@ -66,7 +66,7 @@ export function IntroAnimation({ onDone }: Props) {
 
   return (
     <Pressable style={styles.overlay} onPress={finish} accessibilityRole="button" accessibilityLabel="略過開場動畫">
-      <Animated.View style={{ opacity: at([3950, DURATION], [1, 0]) }}>
+      <Animated.View style={{ opacity: at([4450, DURATION], [1, 0]) }}>
         <View style={[styles.canvas, { transform: [{ translateX: OFFSET.x }, { translateY: OFFSET.y }] }]}>
           <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateY: at([3050, 3250, 3400, 3550], [0, px(-22), px(4), 0]) }] }]}>
             {/* 貓耳朵：從蓋子後面長出來 */}
@@ -177,6 +177,7 @@ export function IntroAnimation({ onDone }: Props) {
           </Animated.View>
         </View>
         <Animated.Text style={[styles.wordmark, { opacity: at([3100, 3500], [0, 1]), transform: [{ translateY: OFFSET.y }] }]}>職缺體檢</Animated.Text>
+        <Animated.Text style={[styles.tagline, { opacity: at([3400, 3800], [0, 1]), transform: [{ translateY: OFFSET.y }] }]}>找工作，先安心。</Animated.Text>
       </Animated.View>
     </Pressable>
   );
@@ -187,5 +188,6 @@ const styles = StyleSheet.create({
   canvas: { width: SIZE, height: SIZE, overflow: 'visible' },
   // 放大鏡小畫布的左上角放在 viewBox 的 (VIEW.x - 160, VIEW.y - 160)，再用 translate 移到鏡片位置。
   scanner: { position: 'absolute', left: px(-160), top: px(-160), width: px(480), height: px(480) },
-  wordmark: { position: 'absolute', left: 0, right: 0, textAlign: 'center', top: SIZE + 4, fontSize: 30, fontWeight: '900', letterSpacing: 2.4, color: colors.text }
+  wordmark: { position: 'absolute', left: 0, right: 0, textAlign: 'center', top: SIZE + 4, fontSize: 30, fontWeight: '900', letterSpacing: 2.4, color: colors.text },
+  tagline: { position: 'absolute', left: 0, right: 0, textAlign: 'center', top: SIZE + 52, fontSize: 17, fontWeight: '700', letterSpacing: 3, color: colors.textBody }
 });

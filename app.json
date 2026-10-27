@@ -3,7 +3,7 @@
     "name": "職缺體檢",
     "slug": "job-check-mobile",
     "scheme": "jobcheck",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "plugins": [
@@ -31,7 +31,8 @@
         }
       ],
       "expo-font",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-iap"
     ],
     "ios": {
       "supportsTablet": false,

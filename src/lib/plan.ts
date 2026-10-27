@@ -5,7 +5,7 @@ import { billingConfigured } from '@/src/lib/billing';
 import { FREE_MONTHLY_LIMIT, LEGACY_MONTHLY_LIMIT } from '@/src/lib/usage';
 
 /**
- * 建置時有 RevenueCat 金鑰才開始收費（免費每月 5 次、比較職缺要 Pro）。
+ * iOS 才開始收費（免費每月 5 次、比較職缺要 Pro；Apple 訂閱，見 billing.ts）。
  * 在那之前維持全免費、每月 30 次，不擋任何功能，免得還不能購買就把人鎖住。
  */
 export const paymentsEnabled = billingConfigured;
@@ -30,7 +30,7 @@ export function isProActive(profile: Partial<PlanProfile> | null | undefined) {
 }
 
 /**
- * 目前帳號的方案（以 Supabase profiles 為準；RevenueCat 購買後由 webhook 更新）。
+ * 目前帳號的方案（以 Supabase profiles 為準；購買後由後端驗證 Apple 交易時更新）。
  * 讀取失敗時保留上次讀到的方案並標 error，不把 Pro 使用者當成免費版；沒有登入時不算載入中。
  */
 export function usePlan() {
