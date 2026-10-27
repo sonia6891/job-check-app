@@ -1,0 +1,32 @@
+name: Prepare App Store review (no submission)
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: TestFlight build to select for 1.0.0
+        required: true
+        type: string
+      apply:
+        description: Write to App Store Connect (otherwise only list what would change)
+        required: false
+        default: false
+        type: boolean
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Select build, copy review contact, upload screenshots
+        env:
+          BUILD_NUMBER: ${{ inputs.build_number }}
+          APPLY: ${{ inputs.apply && '1' || '' }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID || secrets.APPLE_ASC_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID || secrets.APPLE_ASC_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 || secrets.APPLE_ASC_KEY_P8 }}
+        run: node scripts/asc-prepare-review.mjs
