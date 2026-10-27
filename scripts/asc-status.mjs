@@ -37,6 +37,10 @@ for (const v of versions) {
   for (const l of locales) {
     const sets = (await get(`/v1/appStoreVersionLocalizations/${l.id}/appScreenshotSets?include=appScreenshots&limit=50`)).data;
     shots[l.attributes.locale] = Object.fromEntries(sets.map((s) => [s.attributes.screenshotDisplayType, s.relationships?.appScreenshots?.data?.length ?? 0]));
+    for (const set of sets) {
+      const items = (await get(`/v1/appScreenshotSets/${set.id}/appScreenshots`)).data;
+      out('SCREENSHOT_STATES', { displayType: set.attributes.screenshotDisplayType, items: items.map((i) => ({ file: i.attributes.fileName, state: i.attributes.assetDeliveryState?.state, errors: i.attributes.assetDeliveryState?.errors })) });
+    }
   }
   out('VERSION', {
     id: v.id, version: v.attributes.versionString, state: v.attributes.appStoreState, releaseType: v.attributes.releaseType,
