@@ -146,19 +146,14 @@ for (const g of groups) {
     if (APPLY && !shot) await upload('subscriptionAppStoreReviewScreenshots', {}, { subscription: { data: { type: 'subscriptions', id: s.id } } }, SUBSCRIPTION_SHOT);
   }
 }
-// 6. 送審：第一次的訂閱要跟著 App 版本一起送，先把訂閱交出去，再送版本。
+// 6. 送審：第一次的訂閱 API 不能單獨送（409），要先在 App Store Connect 網頁的訂閱頁按「新增以供審查」
+//    放進提交草稿；這裡把 1.0.0 加進同一份草稿再送出。
 if (SUBMIT) {
-  for (const g of groups) {
-    for (const s of (await get(`/v1/subscriptionGroups/${g.id}/subscriptions`)).data) {
-      if (s.attributes.state !== 'READY_TO_SUBMIT') continue;
-      await api('POST', '/v1/subscriptionSubmissions', { data: { type: 'subscriptionSubmissions', relationships: { subscription: { data: { type: 'subscriptions', id: s.id } } } } });
-      log('SUBSCRIPTION_SUBMITTED', { productId: s.attributes.productId });
-    }
-  }
   const open = (await get(`/v1/apps/${app.id}/reviewSubmissions?filter[platform]=IOS&filter[state]=READY_FOR_REVIEW,UNRESOLVED_ISSUES`)).data;
   const submission = open[0] || (await api('POST', '/v1/reviewSubmissions', { data: { type: 'reviewSubmissions', attributes: { platform: 'IOS' }, relationships: { app: { data: { type: 'apps', id: app.id } } } } })).data;
-  const items = (await get(`/v1/reviewSubmissions/${submission.id}/items`)).data;
-  if (!items.length) await api('POST', '/v1/reviewSubmissionItems', { data: { type: 'reviewSubmissionItems', relationships: { reviewSubmission: { data: { type: 'reviewSubmissions', id: submission.id } }, appStoreVersion: { data: { type: 'appStoreVersions', id: version.id } } } } });
+  const items = (await get(`/v1/reviewSubmissions/${submission.id}/items?include=appStoreVersion`)).data;
+  log('DRAFT_ITEMS', items.map((i) => ({ state: i.attributes.state, version: i.relationships?.appStoreVersion?.data?.id ?? null })));
+  if (!items.some((i) => i.relationships?.appStoreVersion?.data?.id === version.id)) await api('POST', '/v1/reviewSubmissionItems', { data: { type: 'reviewSubmissionItems', relationships: { reviewSubmission: { data: { type: 'reviewSubmissions', id: submission.id } }, appStoreVersion: { data: { type: 'appStoreVersions', id: version.id } } } } });
   const done = (await api('PATCH', `/v1/reviewSubmissions/${submission.id}`, { data: { type: 'reviewSubmissions', id: submission.id, attributes: { submitted: true } } })).data;
   log('SUBMITTED', { submission: done.id, state: done.attributes.state });
 }
