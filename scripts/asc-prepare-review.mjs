@@ -98,8 +98,9 @@ const detail = (await get(`/v1/appStoreVersions/${version.id}/appStoreReviewDeta
 const contact = Object.fromEntries(CONTACT.map((k) => [k, source[k]]));
 log('REVIEW_CONTACT', { hasDetail: !!detail, alreadyComplete: !!detail && CONTACT.every((k) => detail.attributes[k]) });
 if (APPLY) {
-  if (detail) await api('PATCH', `/v1/appStoreReviewDetails/${detail.id}`, { data: { type: 'appStoreReviewDetails', id: detail.id, attributes: contact } });
-  else await api('POST', '/v1/appStoreReviewDetails', { data: { type: 'appStoreReviewDetails', attributes: { ...contact, demoAccountRequired: false }, relationships: { appStoreVersion: { data: { type: 'appStoreVersions', id: version.id } } } } });
+  const attributes = { ...contact, notes: LISTING.reviewNotes, demoAccountRequired: false };
+  if (detail) await api('PATCH', `/v1/appStoreReviewDetails/${detail.id}`, { data: { type: 'appStoreReviewDetails', id: detail.id, attributes } });
+  else await api('POST', '/v1/appStoreReviewDetails', { data: { type: 'appStoreReviewDetails', attributes, relationships: { appStoreVersion: { data: { type: 'appStoreVersions', id: version.id } } } } });
 }
 
 // 3. 預覽圖
