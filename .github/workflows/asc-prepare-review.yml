@@ -16,6 +16,11 @@ on:
         required: false
         default: false
         type: boolean
+      fix_stuck:
+        description: Re-upload only the screenshots Apple has not finished processing
+        required: false
+        default: false
+        type: boolean
       submit:
         description: Submit the subscriptions and this version for review (needs apply)
         required: false
@@ -38,6 +43,7 @@ jobs:
           APPLY: ${{ inputs.apply && '1' || '' }}
           REPLACE_SCREENSHOTS: ${{ inputs.replace_screenshots && '1' || '' }}
           SUBMIT: ${{ inputs.submit && '1' || '' }}
+          FIX_STUCK: ${{ inputs.fix_stuck && '1' || '' }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID || secrets.APPLE_ASC_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID || secrets.APPLE_ASC_ISSUER_ID }}
           APP_STORE_CONNECT_KEY: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 || secrets.APPLE_ASC_KEY_P8 }}

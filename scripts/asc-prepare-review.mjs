@@ -6,6 +6,7 @@
 //   5. 副標題、宣傳文字、描述照 store/listing-zh-Hant.json 更新。
 // APPLY=1 才會寫入；沒設時只列出會做什麼。已經有的東西跳過，可以重跑。
 // REPLACE_SCREENSHOTS=1：先刪掉已上傳的預覽圖再重傳（換新版宣傳圖時用）。
+// FIX_STUCK=1：只重傳 Apple 還沒處理完（卡住）的預覽圖。
 // SUBMIT=1（要和 APPLY=1 一起）：最後把訂閱和這個版本送審。
 import { createHash, createPrivateKey, sign } from 'node:crypto';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -17,6 +18,7 @@ const VERSION = '1.0.0';
 const BUILD_NUMBER = process.env.BUILD_NUMBER || '';
 const APPLY = process.env.APPLY === '1';
 const REPLACE_SCREENSHOTS = process.env.REPLACE_SCREENSHOTS === '1';
+const FIX_STUCK = process.env.FIX_STUCK === '1';
 const SUBMIT = APPLY && process.env.SUBMIT === '1';
 const LISTING = JSON.parse(readFileSync('store/listing-zh-Hant.json', 'utf8'));
 const SHOTS = 'store/app-store-screenshots';
@@ -110,18 +112,26 @@ const sets = (await get(`/v1/appStoreVersionLocalizations/${loc.id}/appScreensho
 for (const [folder, displayType] of SCREENSHOT_SETS) {
   const files = readdirSync(join(SHOTS, folder)).filter((f) => f.endsWith('.png')).sort().map((f) => join(SHOTS, folder, f));
   let set = sets.find((s) => s.attributes.screenshotDisplayType === displayType);
-  let have = set?.relationships?.appScreenshots?.data?.length ?? 0;
-  log('SCREENSHOTS', { displayType, files: files.length, have, replace: REPLACE_SCREENSHOTS });
-  if (APPLY && REPLACE_SCREENSHOTS && have) {
-    for (const old of set.relationships.appScreenshots.data) await api('DELETE', `/v1/appScreenshots/${old.id}`);
-    have = 0;
+  // 每張已上傳的圖：檔名和 Apple 處理狀態。卡在 UPLOAD_COMPLETE 很久的（Apple 沒處理完）視同沒傳。
+  let uploaded = set ? (await get(`/v1/appScreenshotSets/${set.id}/appScreenshots`)).data : [];
+  log('SCREENSHOTS', { displayType, files: files.length, have: uploaded.map((i) => [i.attributes.fileName, i.attributes.assetDeliveryState?.state]), replace: REPLACE_SCREENSHOTS, fixStuck: FIX_STUCK });
+  if (!APPLY) continue;
+  for (const item of uploaded) {
+    const stuck = item.attributes.assetDeliveryState?.state !== 'COMPLETE';
+    if (REPLACE_SCREENSHOTS || (FIX_STUCK && stuck)) await api('DELETE', `/v1/appScreenshots/${item.id}`);
   }
-  if (!APPLY || have >= files.length) continue;
   if (!set) set = (await api('POST', '/v1/appScreenshotSets', { data: { type: 'appScreenshotSets', attributes: { screenshotDisplayType: displayType }, relationships: { appStoreVersionLocalization: { data: { type: 'appStoreVersionLocalizations', id: loc.id } } } } })).data;
-  for (const f of files.slice(have)) {
-    await upload('appScreenshots', {}, { appScreenshotSet: { data: { type: 'appScreenshotSets', id: set.id } } }, f);
+  uploaded = (await get(`/v1/appScreenshotSets/${set.id}/appScreenshots`)).data;
+  const byName = new Map(uploaded.map((i) => [i.attributes.fileName, i.id]));
+  for (const f of files) {
+    const name = f.split(/[\/]/).pop();
+    if (byName.has(name)) continue;
+    byName.set(name, await upload('appScreenshots', {}, { appScreenshotSet: { data: { type: 'appScreenshotSets', id: set.id } } }, f));
     console.log('UPLOADED', f, statSync(f).size);
   }
+  // 重傳的會排到最後，照檔名 1～5 排回來。
+  const order = files.map((f) => byName.get(f.split(/[\/]/).pop())).filter(Boolean);
+  await api('PATCH', `/v1/appScreenshotSets/${set.id}/relationships/appScreenshots`, { data: order.map((id) => ({ type: 'appScreenshots', id })) });
 }
 
 // 5. 商店文字
