@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 import { prefs } from '@/src/lib/prefs';
 import { colors, space } from '@/src/theme/tokens';
 import { Button, FocusStatusBar, T } from '@/src/ui';
@@ -11,17 +11,23 @@ const ink = colors.text;
 
 /** 三張引導頁的插圖（Figma「引導頁」）。 */
 function Art({ index }: { index: number }) {
+  // 和 App 圖示、開場動畫同一個公文包，放大鏡在旁邊打勾。
   if (index === 0) return (
     <Svg width={280} height={224} viewBox="0 0 300 240">
       <Circle cx={150} cy={128} r={104} fill={colors.verdict} />
       <Circle cx={252} cy={44} r={14} fill={colors.accent} />
       <Circle cx={46} cy={196} r={9} fill={colors.success} />
-      <Rect x={82} y={44} width={112} height={150} rx={18} fill="#FFFFFF" stroke={ink} strokeWidth={5} />
-      <Rect x={112} y={32} width={52} height={24} rx={9} fill={colors.primary} stroke={ink} strokeWidth={5} />
-      <Path d="M106 92h64M106 118h50M106 144h36" stroke={ink} strokeWidth={5} strokeLinecap="round" />
-      <Circle cx={196} cy={146} r={38} fill={colors.accent} stroke={ink} strokeWidth={5} />
-      <Path d="M223 173l26 26" stroke={ink} strokeWidth={10} strokeLinecap="round" />
-      <Path d="M180 146l11 11 20-22" stroke={ink} strokeWidth={6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <G transform="translate(41 44) scale(1.5)">
+        <Path d="M44 26v-5a6 6 0 0 1 6-6h16a6 6 0 0 1 6 6v5" fill="none" stroke={ink} strokeWidth={3.4} />
+        <Rect x={22} y={38} width={72} height={46} rx={9} fill="#FFFFFF" stroke={ink} strokeWidth={3.4} />
+        <Rect x={17} y={26} width={82} height={22} rx={9} fill="#FFFFFF" stroke={ink} strokeWidth={3.4} />
+        <Rect x={31} y={38} width={12} height={14} rx={3.5} fill={colors.accent} stroke={ink} strokeWidth={3.4} />
+        <Rect x={73} y={38} width={12} height={14} rx={3.5} fill={colors.accent} stroke={ink} strokeWidth={3.4} />
+        <Path d="M28 64h18l6-11 8 22 7-16 5 5h16" fill="none" stroke={colors.primary} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
+      </G>
+      <Circle cx={206} cy={160} r={34} fill="#FFFFFF" stroke={ink} strokeWidth={5} />
+      <Path d="M230 184l22 22" stroke={ink} strokeWidth={10} strokeLinecap="round" />
+      <Path d="M190 160l11 11 20-22" stroke={colors.primary} strokeWidth={6} strokeLinecap="round" strokeLinejoin="round" fill="none" />
     </Svg>
   );
   if (index === 1) return (

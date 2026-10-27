@@ -12,11 +12,11 @@ const icon = await readFile(source, 'utf8');
 if (!icon.includes('id="background"') || !icon.includes('id="mark"')) {
   throw new Error(source + ' must keep the background rect and the mark group.');
 }
-// 只留圖案：拿掉背景和白色星光（奶油米底的啟動畫面上看不到白色），畫布裁到圖案範圍（含線寬）。
+// 只留圖案：拿掉背景（和舊版的白色星光），畫布裁到公文包範圍（含線寬：x 133～891、y 165～851）。
 const mark = icon
   .replace(/<rect id="background"[^>]*\/>/, '')
   .replace(/<g id="sparkles"[\s\S]*?<\/g>/, '')
-  .replace('width="1024" height="1024" viewBox="0 0 1024 1024"', 'width="803" height="871" viewBox="111 77 803 871"');
+  .replace('width="1024" height="1024" viewBox="0 0 1024 1024"', 'width="778" height="706" viewBox="123 155 778 706"');
 
 const render = (svg, size) => sharp(Buffer.from(svg), { density: 300 }).resize(size, size, { fit: 'contain', background: '#00000000' });
 const centered = async (svg, inner, file) => {

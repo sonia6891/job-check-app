@@ -1,0 +1,191 @@
+import { useEffect, useRef } from 'react';
+import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
+import Svg, { Circle, Ellipse, G, Line, Path, Polygon, Polyline, Rect } from 'react-native-svg';
+import { colors } from '@/src/theme/tokens';
+
+/**
+ * 開場動畫（2026-10-27）：App 圖示的公文包長出貓耳和鬍鬚，扣環變成眼睛、心跳線變成貓嘴，
+ * 拿放大鏡把職缺掃一遍，最後打勾。預覽與分鏡見 docs/intro-animation.html。
+ *
+ * 第一格和原生啟動畫面（app.json 的 splash-mark，寬 200）同樣大小、同樣位置，接起來不會跳。
+ * 所有零件畫在同一個 viewBox（40 90 960 960），用一條時間軸 t（毫秒）內插出每個零件的動作，
+ * 只動 transform 和 opacity，交給原生執行緒跑。點一下就略過；系統開了「減少動態效果」就不播。
+ */
+
+const VIEW = { x: 40, y: 90, size: 960 };
+// splash-mark.png：公文包（778 單位寬）在 1024 畫布裡縮成 900，畫面寬 200 → 每單位 0.2259 點。
+const UNIT = (200 * 900) / 1024 / 778;
+const SIZE = VIEW.size * UNIT;
+// 公文包中心 (512, 508) 對齊螢幕中心，和啟動畫面一致。
+const OFFSET = { x: (VIEW.x + VIEW.size / 2 - 512) * UNIT, y: (VIEW.y + VIEW.size / 2 - 508) * UNIT };
+const DURATION = 4300;
+
+const ink = colors.text;
+const coral = colors.primary;
+const yellow = colors.accent;
+const blush = '#FFB8A6';
+const viewBox = `${VIEW.x} ${VIEW.y} ${VIEW.size} ${VIEW.size}`;
+
+/** 畫面座標（viewBox 單位）轉成 transformOrigin 的百分比。 */
+const origin = (x: number, y: number) => `${((x - VIEW.x) / VIEW.size) * 100}% ${((y - VIEW.y) / VIEW.size) * 100}%`;
+const px = (units: number) => units * UNIT;
+
+type Props = { onDone: () => void };
+
+export function IntroAnimation({ onDone }: Props) {
+  const t = useRef(new Animated.Value(0)).current;
+  const finished = useRef(false);
+
+  const finish = () => {
+    if (finished.current) return;
+    finished.current = true;
+    t.stopAnimation();
+    onDone();
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((reduce) => {
+        if (cancelled) return;
+        if (reduce) return finish();
+        Animated.timing(t, { toValue: DURATION, duration: DURATION, easing: Easing.linear, useNativeDriver: true })
+          .start(({ finished: done }) => { if (done) finish(); });
+      })
+      .catch(() => finish());
+    return () => { cancelled = true; t.stopAnimation(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const at = (input: number[], output: number[]) => t.interpolate({ inputRange: input, outputRange: output, extrapolate: 'clamp' });
+
+  // 放大鏡：從右下伸進來，掃過左眼、右眼，最後拿在右下角（鏡片中心的位置，viewBox 單位）。
+  const scanT = [1150, 1454, 1872, 2366, 2746];
+  const lensX = at(scanT, [1180, 760, 340, 690, 690].map(v => px(v - VIEW.x)));
+  const lensY = at(scanT, [1180, 700, 560, 560, 690].map(v => px(v - VIEW.y)));
+
+  return (
+    <Pressable style={styles.overlay} onPress={finish} accessibilityRole="button" accessibilityLabel="略過開場動畫">
+      <Animated.View style={{ opacity: at([3950, DURATION], [1, 0]) }}>
+        <View style={[styles.canvas, { transform: [{ translateX: OFFSET.x }, { translateY: OFFSET.y }] }]}>
+          <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateY: at([3050, 3250, 3400, 3550], [0, px(-22), px(4), 0]) }] }]}>
+            {/* 貓耳朵：從蓋子後面長出來 */}
+            <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: origin(278, 330), transform: [{ scale: at([350, 600, 800], [0, 1.12, 1]) }] }]}>
+              <Svg width={SIZE} height={SIZE} viewBox={viewBox}>
+                <Polygon points="196,330 246,150 360,300" fill="#FFFFFF" stroke={ink} strokeWidth={40} strokeLinejoin="round" />
+                <Polygon points="236,300 254,214 314,292" fill={coral} />
+              </Svg>
+            </Animated.View>
+            <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: origin(746, 330), transform: [{ scale: at([350, 600, 800], [0, 1.12, 1]) }] }]}>
+              <Svg width={SIZE} height={SIZE} viewBox={viewBox}>
+                <Polygon points="828,330 778,150 664,300" fill="#FFFFFF" stroke={ink} strokeWidth={40} strokeLinejoin="round" />
+                <Polygon points="788,300 770,214 710,292" fill={coral} />
+              </Svg>
+            </Animated.View>
+            {/* 公文包本體（和 App 圖示相同） */}
+            <Svg width={SIZE} height={SIZE} viewBox={viewBox} style={StyleSheet.absoluteFill}>
+              <Path d="M372 296V250a62 62 0 0 1 62-62h156a62 62 0 0 1 62 62v46" fill="none" stroke={ink} strokeWidth={46} />
+              <Rect x={196} y={420} width={632} height={408} rx={76} fill="#FFFFFF" stroke={ink} strokeWidth={46} />
+              <Rect x={156} y={296} width={712} height={190} rx={76} fill="#FFFFFF" stroke={ink} strokeWidth={46} />
+            </Svg>
+            {/* 鬍鬚 */}
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: at([1000, 1350], [0, 1]) }]}>
+              <Svg width={SIZE} height={SIZE} viewBox={viewBox}>
+                <G stroke={ink} strokeWidth={18} strokeLinecap="round">
+                  <Line x1={170} y1={640} x2={60} y2={610} />
+                  <Line x1={170} y1={690} x2={52} y2={694} />
+                  <Line x1={854} y1={640} x2={964} y2={610} />
+                  <Line x1={854} y1={690} x2={972} y2={694} />
+                </G>
+              </Svg>
+            </Animated.View>
+            {/* 扣環就是眼睛：眨一下眼 */}
+            <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: origin(512, 482), transform: [{ scaleY: at([950, 1080, 1210], [1, 0.12, 1]) }] }]}>
+              <Svg width={SIZE} height={SIZE} viewBox={viewBox} style={StyleSheet.absoluteFill}>
+                <Rect x={282} y={420} width={104} height={124} rx={30} fill={yellow} stroke={ink} strokeWidth={40} />
+                <Rect x={638} y={420} width={104} height={124} rx={30} fill={yellow} stroke={ink} strokeWidth={40} />
+              </Svg>
+              {/* 眼珠跟著放大鏡看 */}
+              <Animated.View style={[StyleSheet.absoluteFill, {
+                opacity: at([550, 750, 2950, 3150], [0, 1, 1, 0]),
+                transform: [{ translateX: at([1150, 1720, 2252, 2632], [0, px(-18), px(18), px(6)]) }]
+              }]}>
+                <Svg width={SIZE} height={SIZE} viewBox={viewBox}>
+                  <Circle cx={334} cy={488} r={30} fill={ink} />
+                  <Circle cx={325} cy={478} r={9} fill="#FFFFFF" />
+                  <Circle cx={690} cy={488} r={30} fill={ink} />
+                  <Circle cx={681} cy={478} r={9} fill="#FFFFFF" />
+                </Svg>
+              </Animated.View>
+              {/* 掃完開心瞇眼 */}
+              <Animated.View style={[StyleSheet.absoluteFill, { opacity: at([3000, 3200], [0, 1]) }]}>
+                <Svg width={SIZE} height={SIZE} viewBox={viewBox}>
+                  <G fill="none" stroke={ink} strokeWidth={16} strokeLinecap="round">
+                    <Path d="M310 496q24-30 48 0" />
+                    <Path d="M666 496q24-30 48 0" />
+                  </G>
+                </Svg>
+              </Animated.View>
+            </Animated.View>
+            {/* 心跳線淡出，換成貓嘴 */}
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: at([750, 1000], [1, 0]) }]}>
+              <Svg width={SIZE} height={SIZE} viewBox={viewBox}>
+                <Polyline points="244,676 410,676 462,578 530,766 592,630 634,676 780,676" fill="none" stroke={coral} strokeWidth={58} strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </Animated.View>
+            <Animated.View style={[StyleSheet.absoluteFill, {
+              opacity: at([850, 1150], [0, 1]),
+              transformOrigin: origin(512, 640),
+              transform: [{ scale: at([850, 1150], [0.7, 1]) }]
+            }]}>
+              <Svg width={SIZE} height={SIZE} viewBox={viewBox}>
+                <Ellipse cx={292} cy={652} rx={46} ry={26} fill={blush} />
+                <Ellipse cx={732} cy={652} rx={46} ry={26} fill={blush} />
+                <Path d="M478 598h68l-34 38z" fill={coral} stroke={coral} strokeWidth={12} strokeLinejoin="round" />
+                <Path d="M512 640v14M432 660q40 52 80 0q40 52 80 0" fill="none" stroke={ink} strokeWidth={26} strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </Animated.View>
+            {/* 掃描光 */}
+            <Animated.View style={[StyleSheet.absoluteFill, {
+              opacity: at([1454, 1568, 2480, 2670], [0, 0.22, 0.22, 0]),
+              transform: [{ translateY: at([1454, 2480], [0, px(300)]) }]
+            }]}>
+              <Svg width={SIZE} height={SIZE} viewBox={viewBox}>
+                <Rect x={214} y={430} width={596} height={46} rx={23} fill={coral} />
+              </Svg>
+            </Animated.View>
+          </Animated.View>
+
+          {/* 貓掌拿放大鏡：畫在自己的小畫布，鏡片中心在小畫布的 (160, 160) */}
+          <Animated.View style={[styles.scanner, { opacity: at([1150, 1300], [0, 1]), transform: [{ translateX: lensX }, { translateY: lensY }] }]}>
+            <Svg width={px(480)} height={px(480)} viewBox="-160 -160 480 480">
+              <Line x1={84} y1={84} x2={196} y2={196} stroke={ink} strokeWidth={48} strokeLinecap="round" />
+              <Circle r={124} fill="#FFFFFF" fillOpacity={0.6} stroke={ink} strokeWidth={36} />
+              <Path d="M-74-26a80 80 0 0 1 50-50" fill="none" stroke="#FFFFFF" strokeWidth={18} strokeLinecap="round" />
+              <G transform="translate(224 224)">
+                <Circle r={62} fill="#FFFFFF" stroke={ink} strokeWidth={24} />
+                <Circle cx={-26} cy={-50} r={16} fill="#FFFFFF" stroke={ink} strokeWidth={14} />
+                <Circle cx={16} cy={-58} r={16} fill="#FFFFFF" stroke={ink} strokeWidth={14} />
+                <Circle cx={0} cy={12} r={20} fill={blush} />
+              </G>
+            </Svg>
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: at([2900, 3200], [0, 1]) }]}>
+              <Svg width={px(480)} height={px(480)} viewBox="-160 -160 480 480">
+                <Path d="M-56 4l38 38 76-80" fill="none" stroke={coral} strokeWidth={30} strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </Animated.View>
+          </Animated.View>
+        </View>
+        <Animated.Text style={[styles.wordmark, { opacity: at([3100, 3500], [0, 1]), transform: [{ translateY: OFFSET.y }] }]}>職缺體檢</Animated.Text>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  overlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 100, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
+  canvas: { width: SIZE, height: SIZE, overflow: 'visible' },
+  // 放大鏡小畫布的左上角放在 viewBox 的 (VIEW.x - 160, VIEW.y - 160)，再用 translate 移到鏡片位置。
+  scanner: { position: 'absolute', left: px(-160), top: px(-160), width: px(480), height: px(480) },
+  wordmark: { position: 'absolute', left: 0, right: 0, textAlign: 'center', top: SIZE + 4, fontSize: 30, fontWeight: '900', letterSpacing: 2.4, color: colors.text }
+});
