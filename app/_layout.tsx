@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { AppState, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -8,6 +8,7 @@ import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
 import { Inter_800ExtraBold } from '@expo-google-fonts/inter/800ExtraBold';
 import { AuthProvider, useAuth } from '@/src/auth/AuthProvider';
 import { prefs } from '@/src/lib/prefs';
+import { reviewPrompt } from '@/src/lib/reviewPrompt';
 import { colors } from '@/src/theme/tokens';
 import { IntroAnimation } from '@/src/components/IntroAnimation';
 
@@ -27,6 +28,13 @@ export default function RootLayout() {
   // 數字用 Inter，檔案很小，載完再畫面，避免數字跳字型；載入失敗就用系統字。
   const [fontsLoaded, fontError] = useFonts({ Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold });
   const [showIntro, setShowIntro] = useState(!introPlayed);
+  // 評分邀請：開場動畫和登入選擇還在時不問；每次打開或回到 App 記一天。
+  useEffect(() => { reviewPrompt.setBlocked(showIntro); }, [showIntro]);
+  useEffect(() => {
+    reviewPrompt.noteOpen();
+    const sub = AppState.addEventListener('change', state => { if (state === 'active') reviewPrompt.noteOpen(); });
+    return () => sub.remove();
+  }, []);
   if (!fontsLoaded && !fontError) return null;
   return (
     <View style={{ flex: 1 }}>

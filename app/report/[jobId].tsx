@@ -30,6 +30,7 @@ import { showMessage, confirmAction } from '@/src/lib/uiAlerts';
 import { colors, radius, space, tone as toneStyles, type Tone } from '@/src/theme/tokens';
 import { Button, Chip, Empty, FocusStatusBar, IconButton, IconCircle, Notice, Num, Screen, SectionTitle, Surface, T, type IconName } from '@/src/ui';
 import { DaysOffGrid, SalaryScaleView, ShiftBar } from '@/src/ui/viz';
+import { reviewPrompt } from '@/src/lib/reviewPrompt';
 
 type NearMatch = NonNullable<JobReport['official_records']['near_matches']>[number];
 
@@ -119,6 +120,8 @@ export default function ReportScreen() {
     api.buildReport(jobId).then((nextReport) => {
       if (!nextReport || nextReport.job?.id !== jobId) throw new Error('報告資料不完整，請重新讀取。');
       if (active) setReport(nextReport);
+      // 看完第 3 份報告是邀請評分的時機之一。
+      reviewPrompt.noteReport(jobId);
     }).catch((error) => {
       if (active) setLoadError(error?.message || '請稍後再試。');
     });
