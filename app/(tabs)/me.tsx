@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActionSheetIOS, ActivityIndicator, Alert, Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -59,6 +59,9 @@ export default function MeScreen() {
     const s = status as { used?: number; limit?: number } | null;
     if (typeof s?.used === 'number' && typeof s?.limit === 'number') setUsage({ used: s.used, limit: s.limit });
   }, [user?.id]);
+  // 登入換帳號後要用新帳號的 reload，不能用按下按鈕當時（舊帳號）的那一個。
+  const reloadRef = useRef(reload);
+  reloadRef.current = reload;
 
   const refreshPlan = plan.refresh;
   useFocusEffect(useCallback(() => {
@@ -115,11 +118,14 @@ export default function MeScreen() {
       setBusy(name);
       await task();
       setGuestTransfer(authActions.getGuestTransferNotice());
-      await reload();
+      await reloadRef.current();
       if (success) showMessage('完成', success);
     } catch (error: any) {
       setGuestTransfer(authActions.getGuestTransferNotice());
-      showMessage('未完成', error?.message || String(error));
+      // 自己取消登入不算錯誤，不跳警告。
+      const message = String(error?.message ?? error ?? '');
+      if (/cancel|取消/i.test(message) || error?.code === 'ERR_REQUEST_CANCELED') return;
+      showMessage('未完成', message);
     } finally {
       setBusy(null);
     }
@@ -157,11 +163,15 @@ export default function MeScreen() {
   return (
     <Screen safeTop tabBar header={header}>
       {setupIssue ? (
-        <SetupBanner title="登入開發設定尚未完成">
-          {setupIssue === 'anonymous_auth_unavailable'
-            ? 'Supabase 尚未啟用 Anonymous Sign-In。啟用後，第一次開 App 就能以訪客身分開始體檢。'
-            : '缺少 Supabase 環境設定。'}
-        </SetupBanner>
+        __DEV__ ? (
+          <SetupBanner title="登入開發設定尚未完成">
+            {setupIssue === 'anonymous_auth_unavailable'
+              ? 'Supabase 尚未啟用 Anonymous Sign-In。啟用後，第一次開 App 就能以訪客身分開始體檢。'
+              : '缺少 Supabase 環境設定。'}
+          </SetupBanner>
+        ) : (
+          <SetupBanner title="暫時連不上網路">請確認網路後再試一次；連上後就能正常使用。</SetupBanner>
+        )
       ) : null}
 
       <Surface style={{ borderRadius: 26 }}>

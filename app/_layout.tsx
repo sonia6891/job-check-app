@@ -19,8 +19,13 @@ let introPlayed = false;
 function Intro({ onDone }: { onDone: () => void }) {
   const { user, loading } = useAuth();
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
+  // 帳號準備太久（網路很慢）就不等了：第一次打開照樣讓人選登入方式，否則直接進 App。
+  const [gaveUp, setGaveUp] = useState(false);
   useEffect(() => { prefs.getOnboarded().then(setOnboarded).catch(() => setOnboarded(true)); }, []);
-  const askSignIn = onboarded === null || loading ? null : !onboarded && Boolean(!user || user.is_anonymous);
+  useEffect(() => { const t = setTimeout(() => setGaveUp(true), 8000); return () => clearTimeout(t); }, []);
+  const askSignIn = onboarded === null ? null
+    : loading ? (gaveUp ? !onboarded : null)
+    : !onboarded && Boolean(!user || user.is_anonymous);
   return <IntroAnimation askSignIn={askSignIn} onDone={onDone} />;
 }
 

@@ -32,22 +32,30 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let mounted = true;
 
+    // 網路不通時 signInAnonymously 可能等很久或丟錯；不管怎樣都要結束載入，畫面才不會卡住。
     (async () => {
-      const guest = await ensureGuestSession();
-      if (!mounted) return;
-      if (!guest.ok) {
-        setSetupIssue(guest.reason);
-        const { data } = await supabase.auth.getSession();
-        setSession(data.session);
-      } else {
-        setSession(guest.session);
+      try {
+        const guest = await ensureGuestSession();
+        if (!mounted) return;
+        if (!guest.ok) {
+          setSetupIssue(guest.reason);
+          const { data } = await supabase.auth.getSession();
+          if (mounted) setSession(data.session);
+        } else {
+          setSession(guest.session);
+        }
+      } catch {
+        if (mounted) setSetupIssue('anonymous_auth_unavailable');
+      } finally {
+        if (mounted) setLoading(false);
       }
-      if (mounted) setLoading(false);
     })();
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!mounted) return;
       setSession(nextSession);
+      // 之後拿到身分了（例如網路恢復），先前的連線問題就不算了。
+      if (nextSession) setSetupIssue(null);
       // 訂閱跟著目前的帳號（訪客也算）；購買功能失敗不影響登入。
       if (nextSession?.user) void billing.identify(nextSession.user.id).catch(() => {});
     });

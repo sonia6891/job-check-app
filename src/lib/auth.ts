@@ -120,6 +120,9 @@ async function createSessionFromUrl(url: string) {
 type GuestTransfer = { token: string; expiresAt: string | null; guestHadPro: boolean };
 
 async function issueGuestTransferToken(): Promise<GuestTransfer | null> {
+  // 連訪客身分都還沒建立（例如第一次打開時網路不通），就沒有資料要轉移。
+  const { data: current } = await supabase.auth.getSession();
+  if (!current.session) return null;
   const { data, error } = await supabase.auth.getUser();
   if (error) throw new Error('登入前無法確認訪客身分，請稍後重試。');
   if (!data.user?.is_anonymous) return null;
