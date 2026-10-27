@@ -98,8 +98,8 @@ export default function OnboardingScreen() {
           <View key={p.title} style={[styles.page, { width }]} accessible accessibilityLabel={`${p.title.replace('\n', '')}。${p.body}`}>
             <View style={styles.art}><Art index={i} /></View>
             <View style={styles.text}>
-              <T variant="display">{p.title}</T>
-              <T variant="body" color={colors.textBody}>{p.body}</T>
+              <T variant="display" style={styles.center}>{p.title}</T>
+              <T variant="body" color={colors.textBody} style={styles.center}>{p.body}</T>
             </View>
           </View>
         ))}
@@ -111,7 +111,6 @@ export default function OnboardingScreen() {
         <View style={{ alignSelf: 'stretch' }}>
           <Button icon={last ? 'checkmark' : 'arrow-forward'} label={last ? '開始使用' : '下一步'} onPress={() => last ? void finish() : goTo(page + 1)} />
         </View>
-        {last ? <T variant="caption" muted>不用註冊，馬上可以用</T> : <View style={{ height: 20 }} />}
       </View>
     </View>
   );
@@ -122,7 +121,9 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 24, minHeight: 28 },
   page: { flex: 1, paddingHorizontal: 28 },
   art: { alignItems: 'center', paddingTop: 32, paddingBottom: 24 },
-  text: { gap: 12 },
+  // 插圖置中，文字也置中，兩者才對得齊。
+  text: { gap: 12, alignItems: 'center' },
+  center: { textAlign: 'center' },
   bottom: { alignItems: 'center', gap: 18, paddingHorizontal: 24 },
   dots: { flexDirection: 'row', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.lineStrong },

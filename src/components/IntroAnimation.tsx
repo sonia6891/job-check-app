@@ -1,7 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle, Ellipse, G, Line, Path, Polygon, Polyline, Rect } from 'react-native-svg';
 import { colors } from '@/src/theme/tokens';
+import { SignInButtons, type SignInMethod } from '@/src/components/SignInButtons';
+import { showMessage } from '@/src/lib/uiAlerts';
 
 /**
  * 開場動畫（2026-10-27）：App 圖示的公文包長出貓耳和鬍鬚，扣環變成眼睛、心跳線變成貓嘴，
@@ -10,6 +12,9 @@ import { colors } from '@/src/theme/tokens';
  * 第一格和原生啟動畫面（app.json 的 splash-mark，寬 200）同樣大小、同樣位置，接起來不會跳。
  * 所有零件畫在同一個 viewBox（40 90 960 960），用一條時間軸 t（毫秒）內插出每個零件的動作，
  * 只動 transform 和 opacity，交給原生執行緒跑。點一下就略過；系統開了「減少動態效果」就不播。
+ *
+ * 第一次打開（askSignIn）：動畫停在最後一格（貓＋「職缺體檢」），下面出現 Apple、Google、LINE、訪客
+ * 四個登入按鈕；選完才淡出，接著才是引導頁。askSignIn 還不知道（null）時就停在最後一格等。
  */
 
 const VIEW = { x: 40, y: 90, size: 960 };
@@ -19,6 +24,8 @@ const SIZE = VIEW.size * UNIT;
 // 公文包中心 (512, 508) 對齊螢幕中心，和啟動畫面一致。
 const OFFSET = { x: (VIEW.x + VIEW.size / 2 - 512) * UNIT, y: (VIEW.y + VIEW.size / 2 - 508) * UNIT };
 const DURATION = 4800;
+// 淡出前的最後一格。
+const HOLD = 4400;
 
 const ink = colors.text;
 const coral = colors.primary;
@@ -30,11 +37,23 @@ const viewBox = `${VIEW.x} ${VIEW.y} ${VIEW.size} ${VIEW.size}`;
 const origin = (x: number, y: number) => `${((x - VIEW.x) / VIEW.size) * 100}% ${((y - VIEW.y) / VIEW.size) * 100}%`;
 const px = (units: number) => units * UNIT;
 
-type Props = { onDone: () => void };
+type Props = {
+  onDone: () => void;
+  /** true：停在最後一格讓人選登入方式；false：直接播完；null：還在判斷，先停在最後一格。 */
+  askSignIn: boolean | null;
+};
 
-export function IntroAnimation({ onDone }: Props) {
+export function IntroAnimation({ onDone, askSignIn }: Props) {
   const t = useRef(new Animated.Value(0)).current;
+  const buttons = useRef(new Animated.Value(0)).current;
   const finished = useRef(false);
+  const reachedHold = useRef(false);
+  const leaving = useRef(false);
+  const reduceMotion = useRef(false);
+  const ask = useRef(askSignIn);
+  ask.current = askSignIn;
+  const [held, setHeld] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
 
   const finish = () => {
     if (finished.current) return;
@@ -43,19 +62,62 @@ export function IntroAnimation({ onDone }: Props) {
     onDone();
   };
 
+  // 從最後一格淡出。
+  const leave = () => {
+    if (leaving.current) return;
+    leaving.current = true;
+    if (reduceMotion.current) return finish();
+    Animated.timing(t, { toValue: DURATION, duration: DURATION - HOLD, easing: Easing.linear, useNativeDriver: true })
+      .start(({ finished: done }) => { if (done) finish(); });
+  };
+
+  // 到了最後一格：要問登入就秀按鈕，不用問就淡出。
+  const decide = () => {
+    if (!reachedHold.current || leaving.current || ask.current === null) return;
+    if (!ask.current) return leave();
+    setHeld(true);
+    Animated.timing(buttons, { toValue: 1, duration: reduceMotion.current ? 0 : 350, useNativeDriver: true }).start();
+  };
+
+  const toHold = () => {
+    if (reachedHold.current) return;
+    t.stopAnimation();
+    t.setValue(HOLD);
+    reachedHold.current = true;
+    decide();
+  };
+
   useEffect(() => {
     let cancelled = false;
     AccessibilityInfo.isReduceMotionEnabled()
       .then((reduce) => {
         if (cancelled) return;
-        if (reduce) return finish();
-        Animated.timing(t, { toValue: DURATION, duration: DURATION, easing: Easing.linear, useNativeDriver: true })
-          .start(({ finished: done }) => { if (done) finish(); });
+        reduceMotion.current = reduce;
+        if (reduce) return toHold();
+        Animated.timing(t, { toValue: HOLD, duration: HOLD, easing: Easing.linear, useNativeDriver: true })
+          .start(({ finished: done }) => { if (done) toHold(); });
       })
-      .catch(() => finish());
+      .catch(() => toHold());
     return () => { cancelled = true; t.stopAnimation(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { decide(); }, [askSignIn]);
+
+  async function pick(method: SignInMethod, signIn: () => Promise<unknown>) {
+    setBusy(method);
+    try {
+      await signIn();
+      leave();
+    } catch (error: any) {
+      // 自己取消登入就留在這裡，不跳錯誤。
+      const message = String(error?.message ?? error ?? '');
+      if (!/cancel|取消/i.test(message) && error?.code !== 'ERR_REQUEST_CANCELED') showMessage('登入沒有完成', message || '請稍後再試，或先用訪客身分。');
+    } finally {
+      setBusy(null);
+    }
+  }
 
   const at = (input: number[], output: number[]) => t.interpolate({ inputRange: input, outputRange: output, extrapolate: 'clamp' });
 
@@ -65,8 +127,10 @@ export function IntroAnimation({ onDone }: Props) {
   const lensY = at(scanT, [1180, 700, 560, 560, 690].map(v => px(v - VIEW.y)));
 
   return (
-    <Pressable style={styles.overlay} onPress={finish} accessibilityRole="button" accessibilityLabel="略過開場動畫">
-      <Animated.View style={{ opacity: at([4450, DURATION], [1, 0]) }}>
+    <View style={styles.overlay}>
+      {/* 點畫面任何地方就跳到最後一格；登入按鈕放在這層外面，才不會變成按鈕裡的按鈕。 */}
+      <Pressable style={StyleSheet.absoluteFill} onPress={toHold} disabled={held} accessibilityRole="button" accessibilityLabel="略過開場動畫" />
+      <Animated.View pointerEvents="none" style={{ opacity: at([4450, DURATION], [1, 0]), transform: [{ translateY: buttons.interpolate({ inputRange: [0, 1], outputRange: [0, -60] }) }] }}>
         <View style={[styles.canvas, { transform: [{ translateX: OFFSET.x }, { translateY: OFFSET.y }] }]}>
           <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateY: at([3050, 3250, 3400, 3550], [0, px(-22), px(4), 0]) }] }]}>
             {/* 貓耳朵：從蓋子後面長出來 */}
@@ -176,18 +240,26 @@ export function IntroAnimation({ onDone }: Props) {
             </Animated.View>
           </Animated.View>
         </View>
-        <Animated.Text style={[styles.wordmark, { opacity: at([3100, 3500], [0, 1]), transform: [{ translateY: OFFSET.y }] }]}>職缺體檢</Animated.Text>
-        <Animated.Text style={[styles.tagline, { opacity: at([3400, 3800], [0, 1]), transform: [{ translateY: OFFSET.y }] }]}>找工作，先安心。</Animated.Text>
+        <Animated.Text style={[styles.wordmark, { opacity: at([3100, 3500], [0, 1]), transform: [{ translateX: OFFSET.x }, { translateY: OFFSET.y }] }]}>職缺體檢</Animated.Text>
+        <Animated.Text style={[styles.tagline, { opacity: at([3400, 3800], [0, 1]), transform: [{ translateX: OFFSET.x }, { translateY: OFFSET.y }] }]}>找工作，先安心</Animated.Text>
       </Animated.View>
-    </Pressable>
+      {held ? (
+        <Animated.View style={[styles.signIn, { opacity: Animated.multiply(buttons, at([4450, DURATION], [1, 0])), transform: [{ translateY: buttons.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }]}>
+          <SignInButtons busy={busy} onPick={(method, signIn) => void pick(method, signIn)} onGuest={leave} />
+        </Animated.View>
+      ) : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   overlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 100, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
   canvas: { width: SIZE, height: SIZE, overflow: 'visible' },
+  // 選登入方式時貓和字往上挪 60，按鈕放在下面。
+  signIn: { position: 'absolute', left: 0, right: 0, bottom: 96, alignItems: 'center' },
   // 放大鏡小畫布的左上角放在 viewBox 的 (VIEW.x - 160, VIEW.y - 160)，再用 translate 移到鏡片位置。
   scanner: { position: 'absolute', left: px(-160), top: px(-160), width: px(480), height: px(480) },
-  wordmark: { position: 'absolute', left: 0, right: 0, textAlign: 'center', top: SIZE + 4, fontSize: 30, fontWeight: '900', letterSpacing: 2.4, color: colors.text },
-  tagline: { position: 'absolute', left: 0, right: 0, textAlign: 'center', top: SIZE + 52, fontSize: 17, fontWeight: '700', letterSpacing: 3, color: colors.textBody }
+  // 字距也加在最後一個字後面，整行會往左偏半個字距；左邊補同樣寬度，再跟公文包一起平移 OFFSET.x，字才在同一條中線上。
+  wordmark: { position: 'absolute', left: 0, right: 0, textAlign: 'center', top: SIZE + 4, paddingLeft: 2.4, fontSize: 30, fontWeight: '900', letterSpacing: 2.4, color: colors.text },
+  tagline: { position: 'absolute', left: 0, right: 0, textAlign: 'center', top: SIZE + 52, paddingLeft: 3, fontSize: 17, fontWeight: '700', letterSpacing: 3, color: colors.textBody }
 });

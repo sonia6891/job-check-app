@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActionSheetIOS, ActivityIndicator, Alert, Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import * as AppleAuthentication from 'expo-apple-authentication';
+import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/src/lib/supabase';
 import { api } from '@/src/lib/api';
 import { authActions, LINE_PROVIDER } from '@/src/lib/auth';
@@ -11,12 +11,13 @@ import { prefs } from '@/src/lib/prefs';
 import { freeMonthlyLimit, paymentsEnabled, usePlan } from '@/src/lib/plan';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { SetupBanner } from '@/src/components/SetupBanner';
+import { SignInButtons } from '@/src/components/SignInButtons';
+import { avatarUrl, NAME_MAX, providerProfile, updateDisplayName, uploadAvatar } from '@/src/lib/profile';
 import { colors } from '@/src/theme/colors';
 import { showMessage, confirmAction } from '@/src/lib/uiAlerts';
 import { Button, Chip, FocusStatusBar, Notice, Num, Screen, Surface, T } from '@/src/ui';
 import { ProgressBar } from '@/src/ui/viz';
 import { radius, shadow, space } from '@/src/theme/tokens';
-import Svg, { Path } from 'react-native-svg';
 
 function providerLabel(provider?: string) {
   if (provider === 'apple') return 'Apple';
@@ -34,7 +35,7 @@ export default function MeScreen() {
   const limit = usage?.limit ?? freeMonthlyLimit;
   const plan = usePlan();
   const [busy, setBusy] = useState<string | null>(null);
-  const [appleAvailable, setAppleAvailable] = useState(false);
+  const [avatar, setAvatar] = useState<string | null>(null);
   const [keepOriginal, setKeepOriginal] = useState(false);
   const [guestTransfer, setGuestTransfer] = useState<TransferNotice>(() => authActions.getGuestTransferNotice());
 
@@ -50,10 +51,11 @@ export default function MeScreen() {
   const reload = useCallback(async () => {
     if (!user) return;
     const [{ data: p }, { data: status }] = await Promise.all([
-      supabase.from('profiles').select('display_name').eq('id', user.id).single(),
+      supabase.from('profiles').select('display_name,avatar_path').eq('id', user.id).single(),
       supabase.rpc('job_analysis_quota_status')
     ]);
     setProfile(p);
+    setAvatar(await avatarUrl((p as any)?.avatar_path));
     const s = status as { used?: number; limit?: number } | null;
     if (typeof s?.used === 'number' && typeof s?.limit === 'number') setUsage({ used: s.used, limit: s.limit });
   }, [user?.id]);
@@ -69,13 +71,34 @@ export default function MeScreen() {
     });
   }, [reload, refreshPlan]));
 
-  useEffect(() => {
-    if (Platform.OS === 'ios') {
-      AppleAuthentication.isAvailableAsync().then(setAppleAvailable).catch(() => setAppleAvailable(false));
-    }
-  }, []);
-
   const permanent = Boolean(user && !user.is_anonymous);
+  // Google、LINE 帳號沒自己設過名字和頭像時，先用那邊的。
+  const fromProvider = providerProfile(user?.user_metadata);
+  const shownName = profile?.display_name || fromProvider.name || (permanent ? user?.email || '正式帳號' : '訪客使用者');
+  const shownAvatar = avatar || (permanent ? fromProvider.picture : null);
+
+  function editName() {
+    if (!user || !permanent) return;
+    Alert.prompt('你的名字', `最多 ${NAME_MAX} 個字`, [
+      { text: '取消', style: 'cancel' },
+      { text: '儲存', onPress: (value?: string) => { void runBusy('name', () => updateDisplayName(user.id, value ?? '')); } }
+    ], 'plain-text', profile?.display_name || fromProvider.name || '');
+  }
+
+  async function pickAvatar() {
+    if (!user) return;
+    const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 });
+    if (picked.canceled || !picked.assets?.[0]) return;
+    await runBusy('avatar', () => uploadAvatar(user.id, picked.assets[0].uri, profile?.avatar_path));
+  }
+
+  function editProfile() {
+    if (!permanent || busy) return;
+    ActionSheetIOS.showActionSheetWithOptions(
+      { options: ['換頭像', '改名字', '取消'], cancelButtonIndex: 2, title: '編輯個人資料' },
+      index => { if (index === 0) void pickAvatar(); else if (index === 1) editName(); }
+    );
+  }
 
   function confirmDeleteAccount() {
     confirmAction(
@@ -109,9 +132,20 @@ export default function MeScreen() {
   const header = (
     <View style={styles.profile}>
       <FocusStatusBar style="dark" />
-      <View style={styles.avatar}><Ionicons name={permanent ? 'person' : 'person-outline'} size={30} color={colors.primary} /></View>
+      <Pressable accessibilityRole="button" accessibilityLabel="換頭像" disabled={!permanent || Boolean(busy)} onPress={editProfile}>
+        <View style={styles.avatar}>
+          {shownAvatar
+            ? <Image source={{ uri: shownAvatar }} style={styles.avatarImage} />
+            : <Ionicons name={permanent ? 'person' : 'person-outline'} size={30} color={colors.primary} />}
+          {busy === 'avatar' ? <View style={styles.avatarBusy}><ActivityIndicator color="#FFFFFF" /></View> : null}
+        </View>
+        {permanent ? <View style={styles.avatarEdit}><Ionicons name="camera" size={13} color="#FFFFFF" /></View> : null}
+      </Pressable>
       <View style={{ flex: 1, gap: 4 }}>
-        <T variant="title" numberOfLines={1} accessibilityRole="header">{profile?.display_name || (permanent ? user?.email || '正式帳號' : '訪客使用者')}</T>
+        <Pressable accessibilityRole="button" accessibilityLabel="改名字" disabled={!permanent || Boolean(busy)} onPress={editName} style={styles.nameRow}>
+          <T variant="title" numberOfLines={1} accessibilityRole="header" style={{ flexShrink: 1 }}>{shownName}</T>
+          {permanent ? <Ionicons name="pencil" size={15} color={colors.textMuted} /> : null}
+        </Pressable>
         <View style={styles.profileMeta}>
           {plan.pro ? <Chip tone="coral" label="Pro" /> : <Chip tone="neutral" label={paymentsEnabled ? '免費版' : '全部免費'} />}
           <T variant="caption" muted style={{ flex: 1 }} numberOfLines={1}>{permanent ? '正式帳號・換手機也能找回資料' : '不用註冊就能體檢'}</T>
@@ -172,32 +206,7 @@ export default function MeScreen() {
         <Surface fill={colors.accentSoft} flat style={{ borderRadius: 26 }}>
           <T variant="heading">把資料存到帳號</T>
           <T variant="caption" color={colors.textBody}>換手機也不會不見。登入後，現在的職缺、收藏和筆記會一起帶過去；沒搬成功會提醒你重試。</T>
-          {Platform.OS === 'ios' && appleAvailable ? (
-            <AppleAuthentication.AppleAuthenticationButton
-              buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-              cornerRadius={18}
-              style={styles.appleButton}
-              onPress={() => void runBusy('apple', authActions.signInWithApple)}
-            />
-          ) : null}
-          <Pressable accessibilityRole="button" accessibilityLabel="用 LINE 繼續" disabled={Boolean(busy)}
-            onPress={() => void runBusy('line', authActions.signInWithLine)}
-            style={({ pressed }) => [styles.line, (pressed || busy === 'line') && { opacity: 0.7 }]}>
-            <Ionicons name="chatbubble" size={18} color="#FFFFFF" />
-            <T variant="subhead" color="#FFFFFF">{busy === 'line' ? '登入中…' : '用 LINE 繼續'}</T>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="用 Google 繼續" disabled={Boolean(busy)}
-            onPress={() => void runBusy('google', authActions.signInWithGoogle)}
-            style={({ pressed }) => [styles.google, (pressed || busy === 'google') && { opacity: 0.7 }]}>
-            <Svg width={18} height={18} viewBox="0 0 24 24">
-              <Path fill="#4285F4" d="M22 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.6a4.8 4.8 0 0 1-2.1 3.1v2.6h3.4c2-1.8 3.1-4.5 3.1-7.5z" />
-              <Path fill="#34A853" d="M12 22c2.8 0 5.2-.9 6.9-2.5l-3.4-2.6c-.9.6-2.1 1-3.5 1-2.7 0-5-1.8-5.8-4.3H2.7v2.7A10 10 0 0 0 12 22z" />
-              <Path fill="#FBBC05" d="M6.2 13.6a6 6 0 0 1 0-3.8V7.1H2.7a10 10 0 0 0 0 9.2z" />
-              <Path fill="#EA4335" d="M12 6c1.5 0 2.9.5 4 1.5l3-3A10 10 0 0 0 2.7 7.1l3.5 2.7C7 7.8 9.3 6 12 6z" />
-            </Svg>
-            <T variant="subhead">{busy === 'google' ? '登入中…' : '用 Google 繼續'}</T>
-          </Pressable>
+          <SignInButtons busy={busy} onPick={(method, signIn) => void runBusy(method, signIn)} />
         </Surface>
       ) : (
         <Surface style={{ borderRadius: 26 }}>
@@ -272,12 +281,12 @@ const styles = StyleSheet.create({
   muted: { color: colors.textMuted, lineHeight: 20 },
   profile: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingBottom: space.lg },
   profileMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarImage: { width: 64, height: 64 },
+  avatarBusy: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' },
+  avatarEdit: { position: 'absolute', right: -2, bottom: -2, width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, borderWidth: 2, borderColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   usageHead: { flexDirection: 'row', alignItems: 'baseline' },
-  appleButton: { width: '100%', height: 52 },
-  // LINE 品牌綠。
-  line: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52, borderRadius: radius.lg, backgroundColor: '#06C755' },
-  google: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 52, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.lineStrong },
   listCard: { backgroundColor: colors.surface, borderRadius: radius.xl, paddingHorizontal: space.lg, paddingVertical: 4, ...shadow.card },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
   divider: { borderTopWidth: 1, borderTopColor: colors.line },
