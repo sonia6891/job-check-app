@@ -159,12 +159,18 @@ for (const g of groups) {
 // 6. 送審：第一次的訂閱 API 不能單獨送（409），要先在 App Store Connect 網頁的訂閱頁按「新增以供審查」
 //    放進提交草稿，訂閱群組頁也要按一次（群組要一起送）；這裡把 1.0.0 加進同一份草稿再送出。
 //    2026-10-28 職缺體檢 1.0.0 就是這樣在網頁上送出的（4 個項目：版本、兩個訂閱、訂閱群組）。
+//    App Review 退件後，同一份提交會停在 UNRESOLVED_ISSUES：把被退的項目標成已解決，再送出同一份（Apple 的重送流程）。
+const open = (await get(`/v1/apps/${app.id}/reviewSubmissions?filter[platform]=IOS&filter[state]=READY_FOR_REVIEW,UNRESOLVED_ISSUES`)).data;
+const openItems = open[0] ? (await get(`/v1/reviewSubmissions/${open[0].id}/items?include=appStoreVersion&limit=100`)).data : [];
+log('REVIEW_SUBMISSION', { state: open[0]?.attributes.state ?? null, items: openItems.map((i) => ({ state: i.attributes.state, version: i.relationships?.appStoreVersion?.data?.id ?? null })) });
 if (SUBMIT) {
-  const open = (await get(`/v1/apps/${app.id}/reviewSubmissions?filter[platform]=IOS&filter[state]=READY_FOR_REVIEW,UNRESOLVED_ISSUES`)).data;
   const submission = open[0] || (await api('POST', '/v1/reviewSubmissions', { data: { type: 'reviewSubmissions', attributes: { platform: 'IOS' }, relationships: { app: { data: { type: 'apps', id: app.id } } } } })).data;
-  const items = (await get(`/v1/reviewSubmissions/${submission.id}/items?include=appStoreVersion`)).data;
-  log('DRAFT_ITEMS', items.map((i) => ({ state: i.attributes.state, version: i.relationships?.appStoreVersion?.data?.id ?? null })));
+  const items = openItems;
   if (!items.some((i) => i.relationships?.appStoreVersion?.data?.id === version.id)) await api('POST', '/v1/reviewSubmissionItems', { data: { type: 'reviewSubmissionItems', relationships: { reviewSubmission: { data: { type: 'reviewSubmissions', id: submission.id } }, appStoreVersion: { data: { type: 'appStoreVersions', id: version.id } } } } });
+  for (const item of items.filter((i) => i.attributes.state === 'REJECTED')) {
+    await api('PATCH', `/v1/reviewSubmissionItems/${item.id}`, { data: { type: 'reviewSubmissionItems', id: item.id, attributes: { resolved: true } } });
+    log('RESOLVED_ITEM', item.id);
+  }
   const done = (await api('PATCH', `/v1/reviewSubmissions/${submission.id}`, { data: { type: 'reviewSubmissions', id: submission.id, attributes: { submitted: true } } })).data;
   log('SUBMITTED', { submission: done.id, state: done.attributes.state });
 }
