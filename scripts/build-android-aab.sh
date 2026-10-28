@@ -64,10 +64,13 @@ const types = gradle.search(/buildTypes\s*\{/);
 const releaseType = types < 0 ? -1 : gradle.slice(types).search(/\n\s*release\s*\{/);
 if (releaseType < 0) throw new Error('No release build type in android/app/build.gradle');
 const start = types + releaseType;
-const at = gradle.indexOf('signingConfig signingConfigs.debug', start);
+// expo-iap rewrites the template line to assignment syntax (`signingConfig = signingConfigs.debug`).
+const debugSigning = /signingConfig(\s*=\s*|\s+)signingConfigs\.debug/g;
+debugSigning.lastIndex = start;
+const match = debugSigning.exec(gradle);
 const end = gradle.indexOf('\n        }', start + 1);
-if (at < 0 || (end >= 0 && at > end)) throw new Error('Release build type does not use the debug signing config as expected');
-gradle = gradle.slice(0, at) + 'signingConfig signingConfigs.release' + gradle.slice(at + 'signingConfig signingConfigs.debug'.length);
+if (!match || (end >= 0 && match.index > end)) throw new Error('Release build type does not use the debug signing config as expected');
+gradle = gradle.slice(0, match.index) + `signingConfig${match[1]}signingConfigs.release` + gradle.slice(match.index + match[0].length);
 fs.writeFileSync(file, gradle);
 console.log('Release build type now signs with the upload key.');
 JS
@@ -76,7 +79,7 @@ set +e
 (
   cd android
   timeout --signal=TERM --kill-after=30s 45m \
-    bash ./gradlew :app:bundleRelease --no-daemon --max-workers=2 --no-parallel \
+    bash ./gradlew :app:bundleRelease -PopeniapStore=play --no-daemon --max-workers=2 --no-parallel \
     --console=plain --stacktrace --warning-mode=summary
 ) 2>&1 | tee build/gradle-bundle.log
 gradle_exit=${PIPESTATUS[0]}
