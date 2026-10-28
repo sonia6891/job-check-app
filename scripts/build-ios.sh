@@ -149,6 +149,18 @@ redact() { sed -E 's/(Apple|iPhone) (Distribution|Development): [^"(]*/\1 \2: [h
 xcodebuild -workspace "$workspace" -scheme "$scheme" -configuration Release \
   -destination 'generic/platform=iOS' -archivePath build/JobCheck.xcarchive \
   -resultBundlePath build/ArchiveResult.xcresult ${args[@]+"${args[@]}"} archive 2>&1 | redact | tee build/archive.log
+
+# App Review rejected 1.0.0 (5.1.1) over a microphone purpose string; check the archived app, not just the config.
+app_plist="$(find build/JobCheck.xcarchive/Products/Applications -maxdepth 2 -name Info.plist -print -quit)"
+[[ -n "$app_plist" ]] || { echo 'Archived app Info.plist not found'; exit 1; }
+plutil -convert json -o build/Info.json "$app_plist"
+node -e "
+const p = require('./build/Info.json');
+const usage = Object.keys(p).filter(k => /UsageDescription$/.test(k)).sort();
+console.log('Info.plist purpose strings:'); for (const k of usage) console.log('  ' + k + ': ' + p[k]);
+const banned = usage.filter(k => ['NSMicrophoneUsageDescription', 'NSFaceIDUsageDescription'].includes(k));
+if (banned.length) { console.error('::error::Info.plist must not declare ' + banned.join(', ')); process.exit(1); }
+"
 if [[ "$mode" == testflight ]]; then
   xcodebuild -exportArchive -archivePath build/JobCheck.xcarchive \
     -exportPath build/upload -exportOptionsPlist build/ExportOptions.plist -allowProvisioningUpdates \

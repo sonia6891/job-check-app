@@ -16,6 +16,11 @@ check(Boolean(app.android?.package), 'Android package name missing');
 check(hasPlugin('expo-apple-authentication'), 'Native Apple authentication plugin missing');
 check(hasPlugin('expo-image-picker'), 'Camera/gallery permissions plugin missing');
 check(hasPlugin('expo-secure-store'), 'Native encrypted transfer cache plugin missing');
+// App Review rejected 1.0.0 (5.1.1) for a microphone purpose string; the app uses neither the microphone nor Face ID.
+const pluginOptions = (name) => app.plugins?.find((p) => Array.isArray(p) && p[0] === name)?.[1] ?? {};
+check(pluginOptions('expo-image-picker').microphonePermission === false, 'expo-image-picker must set microphonePermission: false (no NSMicrophoneUsageDescription)');
+check(pluginOptions('expo-secure-store').faceIDPermission === false, 'expo-secure-store must set faceIDPermission: false (no NSFaceIDUsageDescription)');
+check(!app.ios?.infoPlist?.NSMicrophoneUsageDescription, 'ios.infoPlist must not declare NSMicrophoneUsageDescription');
 check(Boolean(pkg.dependencies?.['expo-secure-store']), 'Expo SecureStore dependency missing');
 check(Boolean(pkg.dependencies?.['expo-ocr-kit']), 'Native OCR package missing');
 check(existsSync('app/(tabs)/_layout.tsx'), 'Mobile bottom navigation missing');
