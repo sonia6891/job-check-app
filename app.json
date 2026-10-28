@@ -12,7 +12,8 @@
         "expo-image-picker",
         {
           "photosPermission": "允許職缺體檢讀取你選擇的職缺截圖，用於本機文字辨識與分析。",
-          "cameraPermission": "允許職缺體檢拍攝職缺內容，用於本機文字辨識與分析。"
+          "cameraPermission": "允許職缺體檢拍攝職缺內容，用於本機文字辨識與分析。",
+          "microphonePermission": false
         }
       ],
       "expo-apple-authentication",

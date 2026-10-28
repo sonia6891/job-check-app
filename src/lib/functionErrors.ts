@@ -1,3 +1,8 @@
+import { Platform } from 'react-native';
+
+// 只有 iOS 能買 Pro（同 billing.ts 的 billingConfigured；這裡不 import billing，避免 api → billing → api 循環）。
+const canBuyPro = Platform.OS === 'ios';
+
 /** Supabase FunctionsHttpError may keep the JSON body in error.context (Response).
  * Preserve the server error code so the quota UI can react correctly.
  */
@@ -19,7 +24,9 @@ export async function normalizeFunctionError(error: unknown): Promise<Error & { 
     const code = normalized.payload.error;
     if (typeof code === 'string') {
       const descriptions: Record<string, string> = {
-        analysis_quota_exceeded: '這個月的免費體檢次數已用完，升級 Pro 可以繼續檢查，或等下個月 1 日恢復。',
+        analysis_quota_exceeded: canBuyPro
+          ? '這個月的免費體檢次數已用完，升級 Pro 可以繼續檢查，或等下個月 1 日恢復。'
+          : '這個月的免費體檢次數已用完，下個月 1 日恢復。',
         feature_requires_pro: '這項功能是 Pro 方案的功能。',
         job_not_found: '找不到這份職缺，請重新整理。',
         job_text_too_short: '內容太少，請貼上完整一點的職缺內容。',

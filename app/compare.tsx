@@ -119,12 +119,15 @@ export default function CompareScreen() {
 
   // 並排比較是 Pro 功能；後端 compare-jobs 也會檢查，這裡先說明並引導升級。
   // 讀不到方案時不先擋，交給後端判斷，免得 Pro 使用者因為網路問題被鎖住。
-  if (paymentsEnabled && !plan.pro && !plan.error) {
+  // Android 還不能購買，只說明之後開放，不放升級按鈕。
+  if (!plan.pro && !plan.error) {
     return (
       <Screen>
         <Empty icon="sparkles" title="並排比較是 Pro 功能"
-          body="把 2～5 份職缺的薪資、工時、休假和公司紀錄排在一起看，一眼找出哪份比較好。升級 Pro 也能不限次數檢查職缺。"
-          action={<Button icon="sparkles" label="看 Pro 方案" onPress={() => router.push('/plans')} />} />
+          body={paymentsEnabled
+            ? '把 2～5 份職缺的薪資、工時、休假和公司紀錄排在一起看，一眼找出哪份比較好。升級 Pro 也能不限次數檢查職缺。'
+            : '把 2～5 份職缺的薪資、工時、休假和公司紀錄排在一起看。Android 版的 Pro 方案之後開放。'}
+          action={paymentsEnabled ? <Button icon="sparkles" label="看 Pro 方案" onPress={() => router.push('/plans')} /> : undefined} />
       </Screen>
     );
   }

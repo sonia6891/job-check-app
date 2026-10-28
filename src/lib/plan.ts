@@ -2,14 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/src/lib/supabase';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { billingConfigured } from '@/src/lib/billing';
-import { FREE_MONTHLY_LIMIT, LEGACY_MONTHLY_LIMIT } from '@/src/lib/usage';
+import { FREE_MONTHLY_LIMIT } from '@/src/lib/usage';
 
 /**
- * iOS 才開始收費（免費每月 5 次、比較職缺要 Pro；Apple 訂閱，見 billing.ts）。
- * 在那之前維持全免費、每月 30 次，不擋任何功能，免得還不能購買就把人鎖住。
+ * 只有 iOS 能買 Pro（Apple 訂閱，見 billing.ts）；Android 版先免費上架，Pro 之後開放。
+ * 後端從 2026-10-27（pro_plan_quota_switch）起對所有平台都是免費每月 5 次、比較職缺要 Pro，
+ * 所以 Android 也照這個上限顯示，只是不出現購買入口。
  */
 export const paymentsEnabled = billingConfigured;
-export const freeMonthlyLimit = paymentsEnabled ? FREE_MONTHLY_LIMIT : LEGACY_MONTHLY_LIMIT;
+export const freeMonthlyLimit = FREE_MONTHLY_LIMIT;
 
 export type PlanProfile = { plan: string | null; plan_expire_at: string | null };
 

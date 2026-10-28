@@ -163,7 +163,14 @@ export default function PlansScreen() {
         詐騙警訊、要先付錢的陷阱、低於基本工資、政府違規紀錄，不管有沒有訂閱都會完整顯示。
       </Notice>
 
-      {!plan.pro ? (
+      {/* Android 還沒接 Google Play 結帳：不放價格、購買和恢復購買，只說明之後開放。 */}
+      {!billingConfigured && !plan.pro ? (
+        <Notice tone="info" icon="time-outline" title="Android 版的 Pro 之後開放">
+          {`現在可以免費使用，每月 ${FREE_MONTHLY_LIMIT} 次完整體檢。Pro 開放購買後，會在這一頁更新。`}
+        </Notice>
+      ) : null}
+
+      {billingConfigured && !plan.pro ? (
         <View style={{ gap: space.md }}>
           {loading ? <ActivityIndicator color={colors.primary} /> : null}
           {(['ANNUAL', 'MONTHLY'] as const).map(type => {
@@ -183,20 +190,25 @@ export default function PlansScreen() {
           })}
           <Button icon="sparkles" label={`訂閱 Pro・${priceFor(selected)}／${selected === 'ANNUAL' ? '年' : '月'}`}
             loading={busy === 'buy'} disabled={Boolean(busy)} onPress={() => void buy()} />
-          {!billingConfigured ? <T variant="small" muted style={{ textAlign: 'center' }}>測試版還沒開放購買。</T> : null}
         </View>
       ) : null}
 
-      <Button variant="ghost" label={busy === 'restore' ? '恢復中…' : '恢復購買'} disabled={Boolean(busy) || !billingConfigured} onPress={() => void restore()} />
+      {billingConfigured ? (
+        <Button variant="ghost" label={busy === 'restore' ? '恢復中…' : '恢復購買'} disabled={Boolean(busy)} onPress={() => void restore()} />
+      ) : null}
 
       <T variant="small" muted>
         ＊為了防止濫用，Pro 每月最多檢查 {PRO_MONTHLY_LIMIT} 份職缺，一般求職用不到這麼多。
       </T>
-      <T variant="small" muted>
-        付款會在確認購買時從你的 Apple ID 帳戶扣款。訂閱會自動續訂，除非在這一期結束前至少 24 小時取消；可以隨時在 iPhone 的「設定 → 你的名字 → 訂閱」管理或取消。
-      </T>
+      {billingConfigured ? (
+        <T variant="small" muted>
+          付款會在確認購買時從你的 Apple ID 帳戶扣款。訂閱會自動續訂，除非在這一期結束前至少 24 小時取消；可以隨時在 iPhone 的「設定 → 你的名字 → 訂閱」管理或取消。
+        </T>
+      ) : null}
       <View style={styles.links}>
-        <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(APPLE_EULA)}><T variant="captionStrong" color={colors.primary}>使用條款</T></Pressable>
+        {billingConfigured ? (
+          <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(APPLE_EULA)}><T variant="captionStrong" color={colors.primary}>使用條款</T></Pressable>
+        ) : null}
         <Pressable accessibilityRole="link" onPress={() => (PRIVACY_POLICY_URL ? void Linking.openURL(PRIVACY_POLICY_URL) : router.push('/privacy'))}>
           <T variant="captionStrong" color={colors.primary}>{PRIVACY_POLICY_URL ? '隱私權政策' : '隱私與資料'}</T>
         </Pressable>

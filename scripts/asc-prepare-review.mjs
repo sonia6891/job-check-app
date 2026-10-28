@@ -157,7 +157,8 @@ for (const g of groups) {
   }
 }
 // 6. 送審：第一次的訂閱 API 不能單獨送（409），要先在 App Store Connect 網頁的訂閱頁按「新增以供審查」
-//    放進提交草稿；這裡把 1.0.0 加進同一份草稿再送出。
+//    放進提交草稿，訂閱群組頁也要按一次（群組要一起送）；這裡把 1.0.0 加進同一份草稿再送出。
+//    2026-10-28 職缺體檢 1.0.0 就是這樣在網頁上送出的（4 個項目：版本、兩個訂閱、訂閱群組）。
 if (SUBMIT) {
   const open = (await get(`/v1/apps/${app.id}/reviewSubmissions?filter[platform]=IOS&filter[state]=READY_FOR_REVIEW,UNRESOLVED_ISSUES`)).data;
   const submission = open[0] || (await api('POST', '/v1/reviewSubmissions', { data: { type: 'reviewSubmissions', attributes: { platform: 'IOS' }, relationships: { app: { data: { type: 'apps', id: app.id } } } } })).data;

@@ -153,7 +153,7 @@ export default function MeScreen() {
           {permanent ? <Ionicons name="pencil" size={15} color={colors.textMuted} /> : null}
         </Pressable>
         <View style={styles.profileMeta}>
-          {plan.pro ? <Chip tone="coral" label="Pro" /> : <Chip tone="neutral" label={paymentsEnabled ? '免費版' : '全部免費'} />}
+          {plan.pro ? <Chip tone="coral" label="Pro" /> : <Chip tone="neutral" label="免費版" />}
           <T variant="caption" muted style={{ flex: 1 }} numberOfLines={1}>{permanent ? '正式帳號・換手機也能找回資料' : '不用註冊就能體檢'}</T>
         </View>
       </View>
@@ -187,7 +187,7 @@ export default function MeScreen() {
         ) : (
           <>
             <View style={styles.usageHead}>
-              <T variant="bodyStrong" style={{ flex: 1 }}>{paymentsEnabled ? '這個月用了（免費版）' : '這個月用了（全部免費）'}</T>
+              <T variant="bodyStrong" style={{ flex: 1 }}>這個月用了（免費版）</T>
               <Num size={22} color={colors.primary}>{used}</Num>
               <T variant="captionStrong" muted> / {limit} 次</T>
             </View>
