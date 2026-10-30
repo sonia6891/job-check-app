@@ -8,6 +8,7 @@ import { api } from '@/src/lib/api';
 import { authActions, LINE_PROVIDER } from '@/src/lib/auth';
 import type { TransferNotice } from '@/src/lib/accountTransferStatus';
 import { prefs } from '@/src/lib/prefs';
+import { PRO_MONTHLY_LIMIT } from '@/src/lib/usage';
 import { freeMonthlyLimit, paymentsEnabled, usePlan } from '@/src/lib/plan';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { SetupBanner } from '@/src/components/SetupBanner';
@@ -32,7 +33,7 @@ export default function MeScreen() {
   // 次數與上限都由後端的 job_analysis_quota_status 決定，畫面不自己算。
   const [usage, setUsage] = useState<{ used: number; limit: number } | null>(null);
   const used = usage?.used ?? 0;
-  const limit = usage?.limit ?? freeMonthlyLimit;
+  const limit = usage?.limit ?? (plan.pro ? PRO_MONTHLY_LIMIT : freeMonthlyLimit);
   const plan = usePlan();
   const [busy, setBusy] = useState<string | null>(null);
   const [avatar, setAvatar] = useState<string | null>(null);
@@ -180,9 +181,9 @@ export default function MeScreen() {
             <View style={styles.usageHead}>
               <T variant="bodyStrong" style={{ flex: 1 }}>Pro・這個月檢查了</T>
               <Num size={22} color={colors.primary}>{used}</Num>
-              <T variant="captionStrong" muted> 次</T>
+              <T variant="captionStrong" muted> / {limit} 次</T>
             </View>
-            <T variant="small" muted>Pro 不限次數。詐騙警訊和違規紀錄對所有人都免費。</T>
+            <T variant="small" muted>Pro 每月最多 {limit} 次，每月 1 日重新計算。詐騙警訊和違規紀錄對所有人都免費。</T>
           </>
         ) : (
           <>
@@ -197,7 +198,7 @@ export default function MeScreen() {
         )}
         {paymentsEnabled ? (
           <Button compact variant={plan.pro ? 'outline' : 'primary'} icon="sparkles"
-            label={plan.pro ? '管理 Pro 訂閱' : '升級 Pro・不限次數'} onPress={() => router.push('/plans')} />
+            label={plan.pro ? '管理 Pro 訂閱' : `升級 Pro・每月 ${PRO_MONTHLY_LIMIT} 次`} onPress={() => router.push('/plans')} />
         ) : null}
       </Surface>
 
