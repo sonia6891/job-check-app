@@ -14,7 +14,7 @@ import { Button, Notice, Screen, Surface, T } from '@/src/ui';
 type IconName = keyof typeof Ionicons.glyphMap;
 
 const BENEFITS: Array<{ icon: IconName; title: string; body: string }> = [
-  { icon: 'infinite', title: '不限次數檢查', body: `免費版每月 ${FREE_MONTHLY_LIMIT} 次，Pro 想查幾份就查幾份。＊` },
+  { icon: 'document-text', title: `每月最多體檢 ${PRO_MONTHLY_LIMIT} 份職缺`, body: `免費版每月 ${FREE_MONTHLY_LIMIT} 份；Pro 月訂閱與年訂閱皆為每月最多 ${PRO_MONTHLY_LIMIT} 份。` },
   { icon: 'git-compare', title: '並排比較 2～5 份職缺', body: '薪資、工時、休假和公司紀錄排在一起，一眼看出哪份比較好。' },
   { icon: 'heart', title: '支持我們持續更新', body: '政府資料和詐騙手法一直在變，你的訂閱讓我們能一直查下去。' }
 ];
@@ -89,7 +89,7 @@ export default function PlansScreen() {
         showMessage('購買還沒完成', 'App Store 已回應，但訂閱還沒生效。可以稍後按「恢復購買」。');
         return;
       }
-      if (await waitForPro()) showMessage('訂閱成功', '已經開通 Pro，現在可以不限次數檢查職缺了。');
+      if (await waitForPro()) showMessage('訂閱成功', `已開通 Pro，每月最多可體檢 ${PRO_MONTHLY_LIMIT} 份職缺，並可並排比較 2～5 份職缺。`);
       else showMessage('付款完成，正在開通', 'App Store 已完成付款，Pro 通常幾分鐘內就會開通。如果一直沒有開通，請回這裡按「恢復購買」。');
     } catch (e: any) {
       if (e?.userCancelled) return;
@@ -159,7 +159,7 @@ export default function PlansScreen() {
         ))}
       </Surface>
 
-      <Notice tone="ok" icon="shield-checkmark" title="這些永遠免費">
+      <Notice tone="ok" icon="shield-checkmark" title="免費版也有完整風險提醒">
         詐騙警訊、要先付錢的陷阱、低於基本工資、政府違規紀錄，不管有沒有訂閱都會完整顯示。
       </Notice>
 
@@ -198,7 +198,7 @@ export default function PlansScreen() {
       ) : null}
 
       <T variant="small" muted>
-        ＊為了防止濫用，Pro 每月最多檢查 {PRO_MONTHLY_LIMIT} 份職缺，一般求職用不到這麼多。
+        Pro 月訂閱與年訂閱皆為每月最多體檢 {PRO_MONTHLY_LIMIT} 份職缺。每月 1 日重新計算；同一份職缺當月重新檢查不會重複計次。
       </T>
       {billingConfigured ? (
         <T variant="small" muted>
