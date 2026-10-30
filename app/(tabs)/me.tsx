@@ -33,8 +33,8 @@ export default function MeScreen() {
   // 次數與上限都由後端的 job_analysis_quota_status 決定，畫面不自己算。
   const [usage, setUsage] = useState<{ used: number; limit: number } | null>(null);
   const used = usage?.used ?? 0;
-  const limit = usage?.limit ?? (plan.pro ? PRO_MONTHLY_LIMIT : freeMonthlyLimit);
   const plan = usePlan();
+  const limit = usage?.limit ?? (plan.pro ? PRO_MONTHLY_LIMIT : freeMonthlyLimit);
   const [busy, setBusy] = useState<string | null>(null);
   const [avatar, setAvatar] = useState<string | null>(null);
   const [keepOriginal, setKeepOriginal] = useState(false);
