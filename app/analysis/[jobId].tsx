@@ -251,7 +251,7 @@ export default function AnalysisScreen() {
               {`${paymentsEnabled ? '升級 Pro 就能繼續檢查；也可以' : '可以'}等下個月 1 日恢復。同一份職缺當月重新檢查不會重複算，這份職缺已經存在「我的職缺」。`}
             </Notice>
           )}
-          {paymentsEnabled && !quotaExceeded.pro ? <Button icon="sparkles" label="升級 Pro・不限次數" onPress={() => router.push('/plans')} /> : null}
+          {paymentsEnabled && !quotaExceeded.pro ? <Button icon="sparkles" label="升級 Pro・增加每月額度" onPress={() => router.push('/plans')} /> : null}
           <Button variant="soft" label="回我的職缺" onPress={() => router.replace('/jobs')} />
         </View>
       ) : null}
