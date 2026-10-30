@@ -55,6 +55,7 @@ export default function RootLayout() {
           <Stack.Screen name="plans" options={{ title: 'Pro 方案' }} />
           <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
           <Stack.Screen name="privacy" options={{ title: "隱私與資料管理" }} />
+          <Stack.Screen name="sources" options={{ title: "資料來源與聲明" }} />
           <Stack.Screen name="job/edit/[jobId]" options={{ title: "修正職缺資訊" }} />
           <Stack.Screen name="tools/wage-check" options={{ title: "基本工資檢查" }} />
           <Stack.Screen name="dev/notices" options={{ title: "提醒卡片（開發用）" }} />

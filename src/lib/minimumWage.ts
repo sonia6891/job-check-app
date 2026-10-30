@@ -12,7 +12,8 @@ export const MINIMUM_WAGE_RATES: readonly MinimumWageRate[] = [
   { year: 2025, monthly: 28590, hourly: 190 },
   { year: 2026, monthly: 29500, hourly: 196 }
 ];
-export const MINIMUM_WAGE_SOURCE_URL = 'https://www.mol.gov.tw/';
+/** 勞動部 115 年（2026）最低工資公告新聞稿；費率表更新時一起換成當年度公告。也列在 governmentSources.ts。 */
+export const MINIMUM_WAGE_SOURCE_URL = 'https://www.mol.gov.tw/1607/1632/1633/84947/post';
 
 export const wageTypeLabels: Record<WageType, string> = {
   monthly: '月薪', hourly: '時薪', daily: '日薪', annual: '年薪'

@@ -8,6 +8,7 @@ import type { JobReport } from '@/src/types';
 import { SalaryBenchmarkCard } from '@/src/components/SalaryBenchmarkCard';
 import { MinimumWageNotice } from '@/src/components/MinimumWageNotice';
 import { checkMinimumWage } from '@/src/lib/minimumWage';
+import { COMPANY_REGISTRY_LOOKUP_URL } from '@/src/lib/governmentSources';
 import { isTentativeRecords, officialRecordState } from '@/src/lib/officialRecordState';
 import { WorkHoursNotice } from '@/src/components/WorkHoursNotice';
 import { PostingRiskNotice } from '@/src/components/PostingRiskNotice';
@@ -447,6 +448,13 @@ export default function ReportScreen() {
               <T variant="caption" muted>{[report.company.tax_id ? `統編 ${report.company.tax_id}` : null, report.company.established_at ? `${report.company.established_at.slice(0, 4)} 年設立` : null].filter(Boolean).join('・')}</T>
             ) : null}
             {report.company.address ? <T variant="small" muted>{report.company.address}</T> : null}
+            {report.company.tax_id ? (
+              <Pressable accessibilityRole="link" accessibilityLabel="開啟經濟部商工登記公示資料查詢服務" hitSlop={6}
+                onPress={() => { void openOfficialSource(COMPANY_REGISTRY_LOOKUP_URL); }} style={styles.sourceLink}>
+                <T variant="small" color={colors.primary}>資料來源：經濟部商工登記公示資料</T>
+                <Ionicons name="open-outline" color={colors.primary} size={13} />
+              </Pressable>
+            ) : null}
           </View>
           {companyConfirmed ? <Ionicons name="checkmark-circle" size={22} color={colors.success} /> : null}
         </View>
@@ -655,6 +663,11 @@ export default function ReportScreen() {
       <View style={styles.sources}>
         {Object.values(report.sources).map((v) => <T key={v} variant="label" muted>資料來源：{v}</T>)}
         <T variant="label" muted>{report.disclaimer}</T>
+        <T variant="label" muted>本 App 由民間開發，不代表任何政府機關。</T>
+        <Pressable accessibilityRole="link" onPress={() => router.push('/sources')} style={styles.inlineLink}>
+          <T variant="label" color={colors.primary}>政府資料原始來源與聲明</T>
+          <Ionicons name="chevron-forward" color={colors.primary} size={14} />
+        </Pressable>
       </View>
 
       <ShareCardSheet
@@ -703,6 +716,7 @@ const styles = StyleSheet.create({
   lawGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   lawCell: { flexGrow: 1, flexBasis: '45%', backgroundColor: colors.warningSoft, borderRadius: radius.md, padding: space.md, gap: 2 },
   inlineLink: { flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 40 },
+  sourceLink: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingTop: 2 },
   manage: { flexDirection: 'row', gap: 10 },
   sources: { gap: space.xs, paddingHorizontal: space.sm }
 });

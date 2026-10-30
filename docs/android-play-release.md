@@ -18,6 +18,10 @@
 
 **這些步驟請你自己在電腦上做，密碼不要貼給任何人（包括 Claude）。**
 
+**最簡單：** 在 PowerShell 執行 `powershell -ExecutionPolicy Bypass -File D:\Projects\job-check-mobile\scripts\setup-android-upload-key.ps1`，它會請你輸入兩次密碼，然後自動做完下面 1–4 步（用 Android Studio 附的 keytool）。
+
+手動做法：
+
 1. 建一個放金鑰的資料夾，例如 `D:\Secrets\job-check-android\`（不要放在專案資料夾裡）。
 2. 在 PowerShell 執行（`keytool` 隨 JDK 安裝；找不到的話先裝 [Temurin JDK 17](https://adoptium.net/)）：
 

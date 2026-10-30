@@ -242,6 +242,11 @@ export default function MeScreen() {
           <Switch value={keepOriginal} onValueChange={toggleKeepOriginal} accessibilityLabel="保留截圖原圖"
             trackColor={{ true: colors.success, false: colors.lineStrong }} thumbColor="#FFFFFF" />
         </View>
+        <Pressable accessibilityRole="button" onPress={() => router.push('/sources')} style={({ pressed }) => [styles.row, styles.divider, pressed && { opacity: 0.7 }]}>
+          <View style={styles.rowIcon}><Ionicons name="library" size={18} color={colors.text} /></View>
+          <View style={{ flex: 1, gap: 1 }}><T variant="bodyStrong">資料來源與聲明</T><T variant="caption" muted>政府資料原始連結；本 App 非政府機關</T></View>
+          <Ionicons name="chevron-forward" size={18} color={colors.placeholder} />
+        </Pressable>
         <Pressable accessibilityRole="button" onPress={() => router.push('/onboarding?replay=1')} style={({ pressed }) => [styles.row, styles.divider, pressed && { opacity: 0.7 }]}>
           <View style={styles.rowIcon}><Ionicons name="book" size={18} color={colors.text} /></View>
           <View style={{ flex: 1, gap: 1 }}><T variant="bodyStrong">使用說明</T><T variant="caption" muted>再看一次三張引導頁</T></View>

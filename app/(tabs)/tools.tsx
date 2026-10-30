@@ -77,6 +77,12 @@ export default function ToolsScreen() {
           </Pressable>
         ))}
       </View>
+      <Pressable accessibilityRole="link" accessibilityLabel="查看專線與政府資料的原始來源" onPress={() => router.push('/sources')}
+        style={({ pressed }) => [styles.sourceLink, pressed && { opacity: 0.7 }]} hitSlop={6}>
+        <T variant="small" muted style={{ flex: 1 }}>165 由內政部警政署、1955 由勞動部提供；本 App 由民間開發，不代表任何政府機關。</T>
+        <T variant="captionStrong" color={colors.primary}>來源</T>
+        <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+      </Pressable>
 
       <SectionTitle title="求職小知識" />
       <View style={styles.listCard}>
@@ -104,6 +110,7 @@ const styles = StyleSheet.create({
   divider: { borderTopWidth: 1, borderTopColor: colors.line },
   rowIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.neutralSoft, alignItems: 'center', justifyContent: 'center' },
   hotlines: { flexDirection: 'row', gap: 10 },
+  sourceLink: { flexDirection: 'row', alignItems: 'center', gap: space.xs, paddingHorizontal: space.xs },
   hotline: { flex: 1, borderRadius: radius.xl, padding: space.lg, gap: 4 },
   hotlineTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
   phone: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' }
