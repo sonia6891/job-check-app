@@ -470,9 +470,9 @@ export default function HomeScreen() {
           </View>
 
           {plan.pro ? (
-            <View style={styles.quota} accessible accessibilityLabel="Pro 方案，不限次數">
+            <View style={styles.quota} accessible accessibilityLabel={quota.kind === 'count' ? `Pro 方案，本月剩餘 ${remaining} 次，每月最多 ${quota.limit} 次` : 'Pro 方案，本月額度讀取中'}>
               <Ionicons name="sparkles" size={16} color="#FFFFFF" />
-              <T variant="caption" color={onBrand.muted}>Pro・不限次數</T>
+              <T variant="caption" color={onBrand.muted}>{quota.kind === 'count' ? `Pro・本月剩 ${remaining}／${quota.limit} 次` : quota.kind === 'error' ? 'Pro・暫時讀不到本月次數' : 'Pro・讀取本月次數…'}</T>
             </View>
           ) : (
             <Pressable accessibilityRole={paymentsEnabled ? 'button' : undefined} style={styles.quota} disabled={!paymentsEnabled} onPress={() => router.push('/plans')}
