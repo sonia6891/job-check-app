@@ -125,7 +125,7 @@ export default function CompareScreen() {
       <Screen>
         <Empty icon="sparkles" title="並排比較是 Pro 功能"
           body={paymentsEnabled
-            ? '把 2～5 份職缺的薪資、工時、休假和公司紀錄排在一起看，一眼找出哪份比較好。升級 Pro 也能不限次數檢查職缺。'
+            ? '把 2～5 份職缺的薪資、工時、休假和公司紀錄排在一起看，一眼找出哪份比較好。升級 Pro 可增加每月職缺體檢額度，詳細內容請查看方案頁。'
             : '把 2～5 份職缺的薪資、工時、休假和公司紀錄排在一起看。Android 版的 Pro 方案之後開放。'}
           action={paymentsEnabled ? <Button icon="sparkles" label="看 Pro 方案" onPress={() => router.push('/plans')} /> : undefined} />
       </Screen>
