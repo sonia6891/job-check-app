@@ -68,3 +68,16 @@ for (const g of groups) {
 
 const submissions = (await get(`/v1/apps/${app.id}/reviewSubmissions?limit=10`)).data;
 out('SUBMISSIONS', submissions.map((s) => ({ id: s.id, state: s.attributes.state, submitted: s.attributes.submittedDate })));
+// 只記類型，不寫姓名或 Email：這個專案的 Actions 紀錄是公開的。
+for (const s of submissions) {
+  try {
+    const r = await get(`/v1/reviewSubmissions/${s.id}?include=submittedByActor,lastUpdatedByActor`);
+    const actor = (ref) => {
+      const a = (r.included || []).find((x) => x.type === ref?.type && x.id === ref?.id);
+      return a ? { actorType: a.attributes.actorType, isThisWorkflowKey: a.attributes.apiKeyId ? a.attributes.apiKeyId === process.env.APP_STORE_CONNECT_KEY_ID : null } : null;
+    };
+    out('SUBMISSION_ACTORS', { id: s.id, submittedBy: actor(r.data.relationships?.submittedByActor?.data), lastUpdatedBy: actor(r.data.relationships?.lastUpdatedByActor?.data) });
+  } catch (e) {
+    out('SUBMISSION_ACTORS_ERROR', { id: s.id, error: String(e.message).slice(0, 300) });
+  }
+}
