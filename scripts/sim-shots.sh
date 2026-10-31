@@ -31,6 +31,9 @@ cp build/sim-build.log "$out/" 2>/dev/null
 [[ $status -eq 0 ]] || exit $status
 
 app="$(find build/sim/Build/Products -maxdepth 2 -name '*.app' -print -quit)"
+# 模擬器要有簽章才跑得起來；這裡用不需要憑證的臨時簽章。
+codesign --force --deep --sign - "$app"
+(cd "$(dirname "$app")" && ditto -c -k --sequesterRsrc --keepParent "$(basename "$app")" "$OLDPWD/$out/app-simulator.zip")
 bundle=com.lumilab.jobcheck
 routes=(home:/ tools:/tools me:/me jobs:/jobs plans:/plans sources:/sources)
 
@@ -56,8 +59,9 @@ print(hits[-1]['udid'] if hits else '')" "$name")"
   dir="$data/Library/Application Support/$bundle/RCTAsyncLocalStorage_V1"
   mkdir -p "$dir"
   printf '{"jobcheck.onboarded":"1"}' > "$dir/manifest.json"
-  xcrun simctl launch "$udid" "$bundle" > "$out/$prefix-launch.txt" 2>&1
-  sleep 14
+  xcrun simctl launch --stdout="$PWD/$out/$prefix-stdout.txt" --stderr="$PWD/$out/$prefix-stderr.txt" "$udid" "$bundle" > "$out/$prefix-launch.txt" 2>&1
+  sleep 20
+  xcrun simctl io "$udid" screenshot "$out/$prefix-launch.png" 2>> "$out/$prefix-shot-errors.txt"
   for pair in "${routes[@]}"; do
     key="${pair%%:*}"; route="${pair#*:}"
     xcrun simctl openurl "$udid" "jobcheck://${route#/}"
@@ -70,7 +74,9 @@ print(hits[-1]['udid'] if hits else '')" "$name")"
   if ! xcrun simctl spawn "$udid" launchctl list | grep -q "UIKitApplication:$bundle"; then
     echo "$name: app is not running at the end" | tee -a "$out/errors.txt"
   fi
-  xcrun simctl spawn "$udid" log show --last 3m --predicate "process == \"$scheme\"" --style compact 2>/dev/null | tail -200 > "$out/$prefix-log.txt"
+  mkdir -p "$out/crashes"
+  cp ~/Library/Logs/DiagnosticReports/*.ips "$out/crashes/" 2>/dev/null
+  xcrun simctl spawn "$udid" log show --info --last 3m --predicate "process == \"$scheme\" OR processImagePath CONTAINS \"$scheme\"" --style compact 2>/dev/null | tail -400 > "$out/$prefix-log.txt"
   xcrun simctl shutdown "$udid"
 }
 
