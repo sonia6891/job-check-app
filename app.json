@@ -41,7 +41,15 @@
       "expo-iap"
     ],
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
+      "infoPlist": {
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ]
+      },
       "bundleIdentifier": "com.lumilab.jobcheck",
       "usesAppleSignIn": true,
       "config": {
