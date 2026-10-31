@@ -35,7 +35,7 @@ export function JobTextReview({ visible, mode, text, sourceUrl, busy, pageCount,
       <View style={[styles.backdrop, !compact && styles.backdropCentered]}>
         <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="返回修改" onPress={busy ? undefined : onCancel} />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={[styles.sheet, { maxHeight: width > PHONE_WIDTH ? height * 0.92 : '92%', paddingBottom: Math.max(insets.bottom, space.lg) + space.md }, !compact && styles.dialog]}>
+          <View style={[styles.sheet, { maxHeight: width > PHONE_WIDTH ? height * 0.92 : '92%', paddingBottom: Math.max(insets.bottom, space.lg) + space.md }, compact ? { paddingLeft: 20 + insets.left, paddingRight: 20 + insets.right } : styles.dialog]}>
             {compact ? <View style={styles.grabber} /> : null}
             <ScrollView contentContainerStyle={{ gap: space.lg }} keyboardShouldPersistTaps="handled">
               <View style={{ gap: 4 }}>

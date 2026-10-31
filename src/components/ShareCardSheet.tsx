@@ -119,7 +119,7 @@ export function ShareCardSheet({ visible, jobLine, verdict, items, onClose, onSh
       <View style={[styles.backdrop, !compact && styles.backdropCentered]}>
         <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="關閉分享" onPress={busy ? undefined : onClose} />
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, space.lg) + space.sm }, short && { maxHeight: height * 0.92 },
-          !compact && [styles.dialog, { width: sideBySide ? DIALOG_WIDE : DIALOG_NARROW }]]}>
+          compact ? { paddingLeft: 20 + insets.left, paddingRight: 20 + insets.right } : [styles.dialog, { width: sideBySide ? DIALOG_WIDE : DIALOG_NARROW }]]}>
           {compact ? <View style={styles.grabber} /> : null}
           <T variant="heading" style={{ textAlign: 'center' }} accessibilityRole="header">分享體檢摘要</T>
 

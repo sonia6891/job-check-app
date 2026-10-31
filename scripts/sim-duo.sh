@@ -106,7 +106,9 @@ snap book
 sim fold 0 -d "$udid"
 sleep 15
 snap live-closed
-if ! xcrun simctl spawn "$udid" launchctl list | grep -q "UIKitApplication:$bundle"; then
+# 先存檔再找：pipefail 下 grep -q 提早結束會讓 launchctl 收到 SIGPIPE，變成誤報。
+xcrun simctl spawn "$udid" launchctl list > "$out/launchctl.txt"
+if ! grep -q "UIKitApplication:$bundle" "$out/launchctl.txt"; then
   echo 'app is not running at the end' | tee -a "$out/errors.txt"
 fi
 mkdir -p "$out/crashes"

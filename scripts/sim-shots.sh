@@ -96,7 +96,8 @@ print(hits[-1]['udid'] if hits else '')" "$name")"
     snap "$udid" "$prefix" unfolded
     xcrun simctl io "$udid" screenConfig --display=1 power on >> "$out/$prefix-shot-errors.txt" 2>&1
   fi
-  if ! xcrun simctl spawn "$udid" launchctl list | grep -q "UIKitApplication:$bundle"; then
+  xcrun simctl spawn "$udid" launchctl list > "$out/$prefix-launchctl.txt"
+  if ! grep -q "UIKitApplication:$bundle" "$out/$prefix-launchctl.txt"; then
     echo "$name: app is not running at the end" | tee -a "$out/errors.txt"
   fi
   mkdir -p "$out/crashes"
