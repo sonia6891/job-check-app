@@ -22,8 +22,14 @@ const FIX_STUCK = process.env.FIX_STUCK === '1';
 const SUBMIT = APPLY && process.env.SUBMIT === '1';
 const LISTING = JSON.parse(readFileSync('store/listing-zh-Hant.json', 'utf8'));
 const SHOTS = 'store/app-store-screenshots';
-// 1320×2868 放 6.9 吋（API 名稱沿用 APP_IPHONE_67），1206×2622 放 6.3 吋（APP_IPHONE_61）。
-const SCREENSHOT_SETS = [['6.9吋', 'APP_IPHONE_67'], ['6.3吋', 'APP_IPHONE_61']];
+// 1320×2868 放 6.9 吋（API 名稱沿用 APP_IPHONE_67），1206×2622 放 6.3 吋（APP_IPHONE_61），2064×2752 放 iPad 13 吋。
+// iPhone Duo 內外螢幕共用一組 APP_IPHONE_DUO（1398×2034、2007×2853），同組檔名不能重複。
+const SCREENSHOT_SETS = [
+  [['6.9吋'], 'APP_IPHONE_67'],
+  [['6.3吋'], 'APP_IPHONE_61'],
+  [['iPad13吋'], 'APP_IPAD_PRO_3GEN_129'],
+  [['iPhoneDuo外螢幕', 'iPhoneDuo內螢幕'], 'APP_IPHONE_DUO'],
+];
 const SUBSCRIPTION_SHOT = join(SHOTS, '訂閱審查用-Pro方案.png');
 
 if (!/^\d+$/.test(BUILD_NUMBER)) throw new Error('BUILD_NUMBER is required');
@@ -109,8 +115,8 @@ if (APPLY) {
 const loc = (await get(`/v1/appStoreVersions/${version.id}/appStoreVersionLocalizations`)).data.find((l) => l.attributes.locale === 'zh-Hant');
 if (!loc) throw new Error('zh-Hant localization missing');
 const sets = (await get(`/v1/appStoreVersionLocalizations/${loc.id}/appScreenshotSets?include=appScreenshots&limit=50`)).data;
-for (const [folder, displayType] of SCREENSHOT_SETS) {
-  const files = readdirSync(join(SHOTS, folder)).filter((f) => f.endsWith('.png')).sort().map((f) => join(SHOTS, folder, f));
+for (const [folders, displayType] of SCREENSHOT_SETS) {
+  const files = folders.flatMap((folder) => readdirSync(join(SHOTS, folder)).filter((f) => f.endsWith('.png')).sort().map((f) => join(SHOTS, folder, f)));
   let set = sets.find((s) => s.attributes.screenshotDisplayType === displayType);
   // 每張已上傳的圖：檔名和 Apple 處理狀態。卡在 UPLOAD_COMPLETE 很久的（Apple 沒處理完）視同沒傳。
   let uploaded = set ? (await get(`/v1/appScreenshotSets/${set.id}/appScreenshots`)).data : [];
@@ -147,8 +153,10 @@ if (APPLY) {
 
 // 4. 訂閱審查截圖
 const groups = (await get(`/v1/apps/${app.id}/subscriptionGroups`)).data;
+let unapprovedSubscriptions = 0;
 for (const g of groups) {
   for (const s of (await get(`/v1/subscriptionGroups/${g.id}/subscriptions`)).data) {
+    if (s.attributes.state !== 'APPROVED') unapprovedSubscriptions += 1;
     let shot = null;
     try { shot = (await get(`/v1/subscriptions/${s.id}/appStoreReviewScreenshot`)).data; } catch { /* 沒有 */ }
     const locales = (await get(`/v1/subscriptions/${s.id}/subscriptionLocalizations`)).data;
@@ -164,6 +172,11 @@ const open = (await get(`/v1/apps/${app.id}/reviewSubmissions?filter[platform]=I
 const openItems = open[0] ? (await get(`/v1/reviewSubmissions/${open[0].id}/items?include=appStoreVersion&limit=100`)).data : [];
 log('REVIEW_SUBMISSION', { state: open[0]?.attributes.state ?? null, items: openItems.map((i) => ({ state: i.attributes.state, version: i.relationships?.appStoreVersion?.data?.id ?? null })) });
 if (SUBMIT) {
+  // 訂閱還沒通過時，版本、每個訂閱、訂閱群組都要在同一份草稿，少一項就不送。
+  const hasVersion = openItems.some((i) => i.relationships?.appStoreVersion?.data?.id === version.id);
+  const total = openItems.length + (hasVersion ? 0 : 1);
+  const need = unapprovedSubscriptions ? unapprovedSubscriptions + 2 : 1;
+  if (total < need) throw new Error(`Draft incomplete: ${total} of ${need} items (version, subscriptions, group)`);
   const submission = open[0] || (await api('POST', '/v1/reviewSubmissions', { data: { type: 'reviewSubmissions', attributes: { platform: 'IOS' }, relationships: { app: { data: { type: 'apps', id: app.id } } } } })).data;
   const items = openItems;
   if (!items.some((i) => i.relationships?.appStoreVersion?.data?.id === version.id)) await api('POST', '/v1/reviewSubmissionItems', { data: { type: 'reviewSubmissionItems', relationships: { reviewSubmission: { data: { type: 'reviewSubmissions', id: submission.id } }, appStoreVersion: { data: { type: 'appStoreVersions', id: version.id } } } } });

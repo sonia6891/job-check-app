@@ -38,11 +38,23 @@
       ],
       "expo-font",
       "expo-sharing",
-      "expo-iap"
+      "expo-iap",
+      "./plugins/with-ios-scene-lifecycle.js"
     ],
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
+        "UIApplicationSceneManifest": {
+          "UIApplicationSupportsMultipleScenes": false,
+          "UISceneConfigurations": {
+            "UIWindowSceneSessionRoleApplication": [
+              {
+                "UISceneConfigurationName": "Default Configuration",
+                "UISceneDelegateClassName": "$(PRODUCT_MODULE_NAME).SceneDelegate"
+              }
+            ]
+          }
+        },
         "UISupportedInterfaceOrientations~ipad": [
           "UIInterfaceOrientationPortrait",
           "UIInterfaceOrientationPortraitUpsideDown",

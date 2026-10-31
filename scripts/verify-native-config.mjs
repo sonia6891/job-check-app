@@ -14,6 +14,9 @@ check(Boolean(app.ios?.bundleIdentifier), 'iOS bundle identifier missing');
 check(app.ios?.config?.usesNonExemptEncryption === false, 'iOS export-compliance answer missing (TestFlight would wait for a manual answer)');
 check(Boolean(app.android?.package), 'Android package name missing');
 check(hasPlugin('expo-apple-authentication'), 'Native Apple authentication plugin missing');
+// The iOS 27 SDK crashes at launch without the scene life cycle.
+check(hasPlugin('./plugins/with-ios-scene-lifecycle.js'), 'iOS scene life-cycle plugin missing');
+check(Boolean(app.ios?.infoPlist?.UIApplicationSceneManifest), 'ios.infoPlist must declare UIApplicationSceneManifest');
 check(hasPlugin('expo-image-picker'), 'Camera/gallery permissions plugin missing');
 check(hasPlugin('expo-secure-store'), 'Native encrypted transfer cache plugin missing');
 // App Review rejected 1.0.0 (5.1.1) for a microphone purpose string; the app uses neither the microphone nor Face ID.

@@ -14,6 +14,14 @@ const allowed = ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_K
   'EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID', 'EXPO_PUBLIC_PRIVACY_POLICY_URL'];
 fs.writeFileSync('.env.local', allowed.map(k => `${k}=${JSON.stringify(env[k] || '')}`).join('\n') + '\n');
 JS
+# 只有這個測試版有：用啟動參數 -simRoute /tools 直接開某一頁，這段不會進正式版。
+cat > src/sim-route.ts <<'TS'
+import { Settings } from 'react-native';
+import { router } from 'expo-router';
+const route = Settings.get('simRoute');
+if (route && route !== '/') setTimeout(() => router.replace(route), 10000);
+TS
+{ echo "import '@/src/sim-route';"; cat app/_layout.tsx; } > build/layout.tmp && mv build/layout.tmp app/_layout.tsx
 npm run assets:brand || exit 1
 npx expo prebuild --platform ios --no-install || exit 1
 (cd ios && pod install) || exit 1
@@ -42,6 +50,17 @@ xcrun simctl list runtimes > "$out/runtimes.txt"
 xcrun simctl help io > "$out/simctl-io-help.txt" 2>&1
 xcrun simctl help ui > "$out/simctl-ui-help.txt" 2>&1
 
+snap() { # 裝置編號 檔名前綴 畫面名稱
+  local udid="$1" prefix="$2" key="$3"
+  if [[ "$prefix" == duo ]]; then
+    # Duo 有兩個螢幕：1 是外螢幕 1398×2034，3 是內螢幕 2007×2853。
+    xcrun simctl io "$udid" screenshot --display=1 "$out/$prefix-out-$key.png" 2>> "$out/$prefix-shot-errors.txt"
+    xcrun simctl io "$udid" screenshot --display=3 "$out/$prefix-in-$key.png" 2>> "$out/$prefix-shot-errors.txt"
+  else
+    xcrun simctl io "$udid" screenshot "$out/$prefix-$key.png" 2>> "$out/$prefix-shot-errors.txt"
+  fi
+}
+
 shoot() { # 裝置名稱 檔名前綴
   local name="$1" prefix="$2" udid data dir key pair route
   udid="$(xcrun simctl list devices available -j | python3 -c "
@@ -59,24 +78,30 @@ print(hits[-1]['udid'] if hits else '')" "$name")"
   dir="$data/Library/Application Support/$bundle/RCTAsyncLocalStorage_V1"
   mkdir -p "$dir"
   printf '{"jobcheck.onboarded":"1"}' > "$dir/manifest.json"
-  xcrun simctl launch --stdout="$PWD/$out/$prefix-stdout.txt" --stderr="$PWD/$out/$prefix-stderr.txt" "$udid" "$bundle" > "$out/$prefix-launch.txt" 2>&1
-  sleep 20
-  xcrun simctl io "$udid" screenshot "$out/$prefix-launch.png" 2>> "$out/$prefix-shot-errors.txt"
   for pair in "${routes[@]}"; do
     key="${pair%%:*}"; route="${pair#*:}"
-    xcrun simctl openurl "$udid" "jobcheck://${route#/}"
-    sleep 5
-    xcrun simctl io "$udid" screenshot "$out/$prefix-$key.png" 2>> "$out/$prefix-shot-errors.txt"
+    xcrun simctl terminate "$udid" "$bundle" 2>/dev/null
+    xcrun simctl launch --stdout="$PWD/$out/$prefix-stdout.txt" --stderr="$PWD/$out/$prefix-stderr.txt" "$udid" "$bundle" -simRoute "$route" >> "$out/$prefix-launch.txt" 2>&1
+    sleep 30
+    snap "$udid" "$prefix" "$key"
   done
+  # 自訂網址走 SceneDelegate；第一次可能跳系統確認框，截圖看得到。
+  xcrun simctl openurl "$udid" "jobcheck://me" 2>> "$out/$prefix-shot-errors.txt"
+  sleep 8
+  snap "$udid" "$prefix" deeplink
   if [[ "$prefix" == duo ]]; then
-    xcrun simctl io "$udid" screenshot --display=external "$out/$prefix-external.png" 2>> "$out/$prefix-shot-errors.txt"
+    # 關掉外螢幕，看 App 會不會搬到內螢幕（等於打開手機）。
+    xcrun simctl io "$udid" screenConfig --display=1 power off >> "$out/$prefix-shot-errors.txt" 2>&1
+    sleep 10
+    snap "$udid" "$prefix" unfolded
+    xcrun simctl io "$udid" screenConfig --display=1 power on >> "$out/$prefix-shot-errors.txt" 2>&1
   fi
   if ! xcrun simctl spawn "$udid" launchctl list | grep -q "UIKitApplication:$bundle"; then
     echo "$name: app is not running at the end" | tee -a "$out/errors.txt"
   fi
   mkdir -p "$out/crashes"
-  cp ~/Library/Logs/DiagnosticReports/*.ips "$out/crashes/" 2>/dev/null
-  xcrun simctl spawn "$udid" log show --info --last 3m --predicate "process == \"$scheme\" OR processImagePath CONTAINS \"$scheme\"" --style compact 2>/dev/null | tail -400 > "$out/$prefix-log.txt"
+  cp ~/Library/Logs/DiagnosticReports/app-*.ips "$out/crashes/" 2>/dev/null
+  xcrun simctl spawn "$udid" log show --info --last 3m --predicate "process == \"$scheme\"" --style compact 2>/dev/null | tail -400 > "$out/$prefix-log.txt"
   xcrun simctl shutdown "$udid"
 }
 
