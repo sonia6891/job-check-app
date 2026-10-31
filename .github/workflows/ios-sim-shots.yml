@@ -1,0 +1,43 @@
+name: iOS simulator screenshots
+
+# 在 iPad、iPhone Duo、iPhone 模擬器上跑真正的 App 並截圖，確認版面。不簽署、不上傳。
+# 新的 workflow 要等進主分支才能手動觸發，所以先用推到 ipad-duo-sim 分支來跑。
+on:
+  push:
+    branches: [ipad-duo-sim]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-sim-shots
+  cancel-in-progress: true
+
+jobs:
+  shots:
+    runs-on: xcode-27
+    timeout-minutes: 110
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Select Xcode 27.1
+        run: sudo xcode-select -s /Applications/Xcode_27.1.app/Contents/Developer
+      - name: Install dependencies
+        run: |
+          if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
+          xcodebuild -version
+      - name: Build for simulator and take screenshots
+        run: bash scripts/sim-shots.sh
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-shots-${{ github.run_number }}
+          path: build/sim-shots
+          if-no-files-found: warn
+          retention-days: 7
