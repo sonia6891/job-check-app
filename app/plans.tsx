@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { billing, billingConfigured, type ProPackage } from '@/src/lib/billing';
 import { isProActive, usePlan } from '@/src/lib/plan';
+import { sameCurrency } from '@/src/lib/price';
 import { useAuth } from '@/src/auth/AuthProvider';
 import { FREE_MONTHLY_LIMIT, PRO_MONTHLY_LIMIT } from '@/src/lib/usage';
 import { confirmAction, showMessage } from '@/src/lib/uiAlerts';
@@ -62,7 +63,7 @@ export default function PlansScreen() {
     const fromStore = monthly != null && annual != null;
     const m = fromStore ? monthly! : FALLBACK_PRICES.MONTHLY;
     const a = fromStore ? annual! : FALLBACK_PRICES.ANNUAL;
-    const perMonth = `NT$${Math.round(a / 12)}`;
+    const perMonth = fromStore ? sameCurrency(pkgFor('ANNUAL')!.priceString, a / 12) : `NT$${Math.round(a / 12)}`;
     const save = m > 0 ? Math.round((1 - a / (m * 12)) * 100) : 0;
     return [perMonth ? `平均每月約 ${perMonth}` : '一次付一年', save > 0 ? `比月繳省約 ${save}%` : ''].filter(Boolean).join('，');
   }

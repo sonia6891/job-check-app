@@ -21,6 +21,7 @@ function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const barMargin = Math.max(16, (width - TAB_BAR_WIDTH) / 2);
   // 第一次打開先看引導頁；讀不到設定時當作看過，不擋住使用。
   useEffect(() => {
     void prefs.getOnboarded().then(done => { if (!done) router.push('/onboarding'); });
@@ -31,8 +32,8 @@ export default function TabLayout() {
       tabBarActiveTintColor: colors.primary,
       tabBarInactiveTintColor: colors.textMuted,
       // 浮動分頁列：左右留 16、距底部安全區 8，內容頁要留 120 的底部空間（Screen tabBar）。
-      // 螢幕比較寬時最寬 TAB_BAR_WIDTH 並置中；手機的左右邊距仍然是 16。
-      tabBarStyle: [styles.bar, { bottom: Math.max(insets.bottom, 12) + 8, marginHorizontal: Math.max(16, (width - TAB_BAR_WIDTH) / 2) }],
+      // 螢幕比較寬時最寬 TAB_BAR_WIDTH 並置中；手機的左右邊距仍然是 16，再加上左右安全區（Duo 外螢幕右側）。
+      tabBarStyle: [styles.bar, { bottom: Math.max(insets.bottom, 12) + 8, marginLeft: barMargin + insets.left, marginRight: barMargin + insets.right }],
       // 預設在平板和橫放時會把文字放到圖示旁邊，膠囊就撐不住了；一律維持圖示在上、文字在下。
       tabBarLabelPosition: 'below-icon',
       tabBarItemStyle: styles.item,

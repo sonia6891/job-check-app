@@ -1,0 +1,50 @@
+name: iOS simulator Duo quick check
+
+# 沿用 ios-sim-shots 編好的 App，只換 JS，看 iPhone Duo 各種姿勢。不簽署、不上傳。
+on:
+  push:
+    branches: [ipad-duo-quick]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ios-sim-duo
+  cancel-in-progress: true
+
+jobs:
+  duo:
+    runs-on: xcode-27
+    timeout-minutes: 45
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      BASE_RUN: '41172401381'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Select Xcode 27.1
+        run: sudo xcode-select -s /Applications/Xcode_27.1.app/Contents/Developer
+      - name: Download the app built by the full check
+        uses: actions/download-artifact@v4
+        with:
+          name: sim-shots-4
+          run-id: ${{ env.BASE_RUN }}
+          github-token: ${{ github.token }}
+          path: build/base
+      - name: Install dependencies
+        run: |
+          if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
+      - name: Replace the JS and shoot every pose
+        run: bash scripts/sim-duo.sh
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-duo-${{ github.run_number }}
+          path: build/sim-shots
+          if-no-files-found: warn
+          retention-days: 7

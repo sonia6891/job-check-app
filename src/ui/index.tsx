@@ -27,6 +27,7 @@ type TextVariant = Exclude<keyof typeof type, 'number'>;
  * header 放在捲動內容最上方、不加左右邊距；safeTop 讓出瀏海（沒有導覽列的頁面用）；
  * tabBar 為 true 時底部多留空間給浮動分頁列；footer 固定在底部（例如主要動作列）。
  * 平板上頁首和內容收在置中的一欄，奶油底仍然滿版；wide 給放得下兩欄的頁面用更寬的一欄（搭配 Columns）。
+ * 左右也讓出安全區：iPhone Duo 外螢幕的相機和狀態列在右側，只有一邊有。
  */
 export function Screen({ children, header, hero, footer, safeTop, tabBar, scroll = true, contentStyle, scrollRef, wide }: PropsWithChildren<{
   header?: ReactNode; /** @deprecated 用 header */ hero?: ReactNode; footer?: ReactNode; safeTop?: boolean; tabBar?: boolean;
@@ -46,7 +47,7 @@ export function Screen({ children, header, hero, footer, safeTop, tabBar, scroll
     </>
   );
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { paddingLeft: insets.left, paddingRight: insets.right }]}>
       {scroll
         ? <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled"><View style={[column, { paddingTop: padTop, paddingBottom: padBottom }]}>{body}</View></ScrollView>
         : <View style={[column, { flex: 1, paddingTop: padTop }]}>{body}</View>}

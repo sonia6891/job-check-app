@@ -96,7 +96,7 @@ export default function OnboardingScreen() {
   }
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + space.sm, paddingBottom: Math.max(insets.bottom, space.lg) + space.lg }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + space.sm, paddingBottom: Math.max(insets.bottom, space.lg) + space.lg, paddingLeft: insets.left, paddingRight: insets.right }]}>
       <FocusStatusBar style="dark" />
       <View style={styles.top}>
         {!last ? (
