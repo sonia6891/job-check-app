@@ -2,7 +2,7 @@
  * 職缺體檢設計系統元件（溫暖友善版，對應 Figma「02 設計系統」）。
  * 新頁面只用這裡的元件與 src/theme/tokens.ts，不再各頁自訂顏色與按鈕。
  */
-import { useCallback, useState, type PropsWithChildren, type ReactNode, type RefObject } from 'react';
+import { Children, useCallback, useState, type PropsWithChildren, type ReactNode, type RefObject } from 'react';
 import {
   ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View,
   type StyleProp, type TextProps, type TextStyle, type ViewStyle
@@ -13,6 +13,9 @@ import { StatusBar } from 'expo-status-bar';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, font, gradient, radius, shadow, space, tone as toneStyles, type, type Tone } from '@/src/theme/tokens';
+import { useLayout, type Layout } from './layout';
+
+export { columnsFor, useLayout } from './layout';
 
 export type IconName = keyof typeof Ionicons.glyphMap;
 type TextVariant = Exclude<keyof typeof type, 'number'>;
@@ -23,12 +26,16 @@ type TextVariant = Exclude<keyof typeof type, 'number'>;
  * 一頁的外框：奶油底、可捲動。
  * header 放在捲動內容最上方、不加左右邊距；safeTop 讓出瀏海（沒有導覽列的頁面用）；
  * tabBar 為 true 時底部多留空間給浮動分頁列；footer 固定在底部（例如主要動作列）。
+ * 平板上頁首和內容收在置中的一欄，奶油底仍然滿版；wide 給放得下兩欄的頁面用更寬的一欄（搭配 Columns）。
  */
-export function Screen({ children, header, hero, footer, safeTop, tabBar, scroll = true, contentStyle, scrollRef }: PropsWithChildren<{
+export function Screen({ children, header, hero, footer, safeTop, tabBar, scroll = true, contentStyle, scrollRef, wide }: PropsWithChildren<{
   header?: ReactNode; /** @deprecated 用 header */ hero?: ReactNode; footer?: ReactNode; safeTop?: boolean; tabBar?: boolean;
-  scroll?: boolean; contentStyle?: StyleProp<ViewStyle>; scrollRef?: RefObject<ScrollView | null>;
+  scroll?: boolean; contentStyle?: StyleProp<ViewStyle>; scrollRef?: RefObject<ScrollView | null>; wide?: boolean;
 }>) {
   const insets = useSafeAreaInsets();
+  const layout = useLayout();
+  const width = wide ? layout.wideWidth : layout.readingWidth;
+  const column = columnStyle(layout, width);
   const top = header ?? hero;
   const padTop = safeTop || hero ? insets.top + space.sm : 0;
   const padBottom = tabBar ? 120 : footer ? space.xxl : 48;
@@ -41,11 +48,50 @@ export function Screen({ children, header, hero, footer, safeTop, tabBar, scroll
   return (
     <View style={styles.screen}>
       {scroll
-        ? <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: padTop, paddingBottom: padBottom }}>{body}</ScrollView>
-        : <View style={{ flex: 1, paddingTop: padTop }}>{body}</View>}
-      {footer ? <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, space.lg) }]}>{footer}</View> : null}
+        ? <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled"><View style={[column, { paddingTop: padTop, paddingBottom: padBottom }]}>{body}</View></ScrollView>
+        : <View style={[column, { flex: 1, paddingTop: padTop }]}>{body}</View>}
+      {footer ? <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, space.lg) }, !layout.compact && { alignSelf: 'center', width }]}>{footer}</View> : null}
       {/* 往下捲時內容不會疊到時間、電池那一列。 */}
       {padTop ? <View pointerEvents="none" style={[styles.statusBarBackdrop, { height: insets.top }]} /> : null}
+    </View>
+  );
+}
+
+/**
+ * 置中的那一欄。內容區自己有 16 的左右邊距（頁首是 20），這裡只補到 gutter 的差額，
+ * 頁首和卡片的對齊關係才會和手機一樣。手機不套任何樣式。
+ */
+function columnStyle(layout: Layout, width: number): ViewStyle | null {
+  if (layout.compact) return null;
+  return { alignSelf: 'center', width: '100%', maxWidth: width + layout.gutter * 2, paddingHorizontal: layout.gutter - space.lg };
+}
+
+/**
+ * 寬螢幕並排兩欄（搭配 <Screen wide>）；其他寬度上下接著排，和一欄的版面完全相同。
+ * 兩種寬度的元件樹一樣，視窗變寬變窄時輸入框不會重新掛載、丟掉焦點。
+ */
+export function Columns({ children, aside }: PropsWithChildren<{ aside: ReactNode }>) {
+  const { wide } = useLayout();
+  return (
+    <View style={wide ? styles.columns : styles.stack}>
+      <View style={wide ? styles.column : styles.stack}>{children}</View>
+      <View style={wide ? styles.column : styles.stack}>{aside}</View>
+    </View>
+  );
+}
+
+/** 卡片格線，同一列等高；columns 為 1 時就是一般的直排清單。最後一列放不滿時留白，不會把卡片撐寬。 */
+export function CardGrid({ columns, gap, children }: PropsWithChildren<{ columns: number; gap: number }>) {
+  const items = Children.toArray(children);
+  const rows = Array.from({ length: Math.ceil(items.length / columns) }, (_, r) => items.slice(r * columns, (r + 1) * columns));
+  return (
+    <View style={{ gap }}>
+      {rows.map((row, r) => (
+        <View key={r} style={{ flexDirection: 'row', gap }}>
+          {row.map((item, i) => <View key={i} style={styles.gridCell}>{item}</View>)}
+          {Array.from({ length: columns - row.length }, (_, i) => <View key={`empty-${i}`} style={styles.gridCell} />)}
+        </View>
+      ))}
     </View>
   );
 }
@@ -313,6 +359,10 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   statusBarBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: colors.bg },
   content: { paddingHorizontal: space.lg, gap: space.lg },
+  stack: { gap: space.lg },
+  columns: { flexDirection: 'row', alignItems: 'flex-start', gap: space.xxl },
+  column: { flex: 1, minWidth: 0, gap: space.lg },
+  gridCell: { flex: 1, minWidth: 0 },
   footer: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl, paddingHorizontal: space.lg, paddingTop: space.md + 2, ...shadow.bar },
   sectionTitle: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.xs, marginTop: space.xs },
   surface: { backgroundColor: colors.surface, borderRadius: 22, gap: space.md },

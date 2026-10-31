@@ -13,7 +13,7 @@ import { SetupBanner } from '@/src/components/SetupBanner';
 import { JobTextReview } from '@/src/components/JobTextReview';
 import type { JobCardData } from '@/src/components/JobCard';
 import { colors, onBrand, radius, shadow, space } from '@/src/theme/tokens';
-import { Button, FocusStatusBar, IconCircle, Num, Screen, SectionTitle, T } from '@/src/ui';
+import { Button, Columns, FocusStatusBar, IconCircle, Num, Screen, SectionTitle, T, useLayout } from '@/src/ui';
 import { showMessage } from '@/src/lib/uiAlerts';
 import { paymentsEnabled, usePlan } from '@/src/lib/plan';
 import { relativeDay } from '@/src/lib/myJobs';
@@ -29,6 +29,8 @@ type PendingOcr = {
 // 上限由後端決定（job_analysis_quota_status），免費／Pro、開放購買前後畫面都不用自己猜。
 type Quota = { kind: 'loading' } | { kind: 'error' } | { kind: 'count'; used: number; limit: number; plan: string };
 type RecentJob = JobCardData & { created_at?: string | null };
+// 視窗夠高才把貼上框拉高；Duo 內螢幕橫放只有 669 高，拉高會把下面的內容擠到分頁列後面。
+const TALL_FROM = 800;
 
 /** 小提醒輪流出現，一天換一則。內容都是勞動法規的基本常識。 */
 const TIPS = [
@@ -82,6 +84,7 @@ export default function HomeScreen() {
   const [recentError, setRecentError] = useState<string | null>(null);
   const [quota, setQuota] = useState<Quota>({ kind: 'loading' });
   const plan = usePlan();
+  const { wide, height } = useLayout();
   const [pendingOcr, setPendingOcr] = useState<PendingOcr | null>(null);
   const [reviewText, setReviewText] = useState(false);
   const [ocrText, setOcrText] = useState('');
@@ -415,127 +418,131 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <Screen safeTop tabBar header={header}>
-        <View style={styles.pasteCard}>
-          <View style={{ gap: 2 }}>
-            <T variant="title" color={onBrand.text}>貼上職缺</T>
-            <T variant="caption" color={onBrand.muted}>網址、分享連結、職缺內容都可以，30 秒找出地雷</T>
-          </View>
-
-          {sourceUrl ? (
-            <View style={styles.sourceBox}>
-              <View style={styles.sourceHead}>
-                <Ionicons name="link" size={15} color={colors.primary} />
-                <T variant="captionStrong" color={colors.primary} style={{ flex: 1 }}>這個網址需要補一點文字</T>
-                <Pressable onPress={() => setSourceUrl(null)} hitSlop={12} accessibilityRole="button" accessibilityLabel="移除來源網址">
-                  <Ionicons name="close" size={18} color={colors.textMuted} />
-                </Pressable>
+      <Screen safeTop tabBar wide header={header}>
+        <Columns aside={(
+          <>
+            <SectionTitle title="最近檢查的工作" action={recent && recent.length ? '全部' : undefined} onAction={() => router.push('/jobs')} />
+            {recentError ? (
+              <View style={styles.recentEmpty}>
+                <T variant="caption" muted style={{ textAlign: 'center' }}>最近紀錄暫時讀不到</T>
+                <Button compact variant="soft" icon="refresh" label="重新讀取" onPress={() => { void init(); }} />
               </View>
-              <T variant="small" numberOfLines={1} color={colors.textBody}>{sourceUrl}</T>
-              <T variant="small" color={colors.textBody}>
-                {text ? '下面是網站公開內容的擷取預覽，請補上缺的部分（薪資、工時、公司名稱）再開始檢查。' : '網站沒有提供足夠的公開內容，請把職缺頁面的文字貼到下面。'}
-              </T>
+            ) : recent === null ? (
+              [0, 1].map(i => <View key={i} style={styles.skeleton} />)
+            ) : recent.length === 0 ? (
+              <View style={styles.recentEmpty}>
+                <IconCircle icon="document-text" coral />
+                <T variant="caption" muted style={{ textAlign: 'center' }}>還沒有檢查過的工作。貼上一份職缺，30 秒內就能看到報告。</T>
+              </View>
+            ) : (
+              <View style={{ gap: 10 }}>
+                {recent.map(job => {
+                  const day = relativeDay(job.created_at, now);
+                  return (
+                    <Pressable key={job.id} accessibilityRole="button"
+                      accessibilityLabel={`查看體檢報告：${job.job_title || '未命名職缺'}，${job.display_company_name || '公司待確認'}`}
+                      onPress={() => router.push(`/report/${job.id}`)}
+                      style={({ pressed }) => [styles.jobRow, pressed && { opacity: 0.85 }]}>
+                      <IconCircle icon="briefcase" coral />
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <T variant="bodyStrong" numberOfLines={1}>{[job.job_title || '未命名職缺', job.display_company_name].filter(Boolean).join('・')}</T>
+                        <T variant="caption" muted numberOfLines={1}>{[day ? `${day}檢查` : null, job.salary_raw].filter(Boolean).join('・') || '薪資沒寫'}</T>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={colors.placeholder} />
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+            <View style={styles.privacy}>
+              <Ionicons name="shield-checkmark" size={15} color={colors.success} />
+              <T variant="small" muted style={{ flex: 1 }}>職缺內容只用來產生你的報告；{keepOriginal ? '已設定保留截圖原圖。' : '截圖原圖 24 小時內自動刪除。'}</T>
             </View>
-          ) : null}
-
-          <TextInput
-            accessibilityLabel="職缺文字內容"
-            accessibilityHint="貼上職缺文字，至少十個字才能檢查"
-            value={text}
-            onChangeText={setText}
-            editable={!busy}
-            multiline
-            textAlignVertical="top"
-            placeholder="把 104、1111 App 的分享連結，或 Facebook 社團上的職缺整段貼進來…"
-            placeholderTextColor={colors.placeholder}
-            style={[styles.input, styles.textArea, busy && { opacity: 0.6 }]}
-          />
-
-          {detectedLink ? (
-            <View style={styles.linkHint} accessible accessibilityLabel={`偵測到${jobSiteName(detectedLink)}職缺網址，會直接讀取這份職缺`}>
-              <Ionicons name="link" size={15} color="#FFFFFF" />
-              <T variant="small" color={onBrand.text} style={{ flex: 1 }}>偵測到 {jobSiteName(detectedLink)} 職缺網址，會直接讀取這份職缺的公司、薪資和內容</T>
+          </>
+        )}>
+          <View style={styles.pasteCard}>
+            <View style={{ gap: 2 }}>
+              <T variant="title" color={onBrand.text}>貼上職缺</T>
+              <T variant="caption" color={onBrand.muted}>網址、分享連結、職缺內容都可以，30 秒找出地雷</T>
             </View>
-          ) : null}
 
-          <View style={styles.actions}>
-            <View style={{ flex: 1 }}>
-              <Button variant="white" icon={detectedLink ? 'link' : 'search'} label={detectedLink ? '讀取並檢查' : '開始檢查'} loading={busy}
-                disabled={Boolean(setupReason)} onPress={startCheck} />
+            {sourceUrl ? (
+              <View style={styles.sourceBox}>
+                <View style={styles.sourceHead}>
+                  <Ionicons name="link" size={15} color={colors.primary} />
+                  <T variant="captionStrong" color={colors.primary} style={{ flex: 1 }}>這個網址需要補一點文字</T>
+                  <Pressable onPress={() => setSourceUrl(null)} hitSlop={12} accessibilityRole="button" accessibilityLabel="移除來源網址">
+                    <Ionicons name="close" size={18} color={colors.textMuted} />
+                  </Pressable>
+                </View>
+                <T variant="small" numberOfLines={1} color={colors.textBody}>{sourceUrl}</T>
+                <T variant="small" color={colors.textBody}>
+                  {text ? '下面是網站公開內容的擷取預覽，請補上缺的部分（薪資、工時、公司名稱）再開始檢查。' : '網站沒有提供足夠的公開內容，請把職缺頁面的文字貼到下面。'}
+                </T>
+              </View>
+            ) : null}
+
+            <TextInput
+              accessibilityLabel="職缺文字內容"
+              accessibilityHint="貼上職缺文字，至少十個字才能檢查"
+              value={text}
+              onChangeText={setText}
+              editable={!busy}
+              multiline
+              textAlignVertical="top"
+              placeholder="把 104、1111 App 的分享連結，或 Facebook 社團上的職缺整段貼進來…"
+              placeholderTextColor={colors.placeholder}
+              style={[styles.input, styles.textArea, wide && height >= TALL_FROM && styles.textAreaTall, busy && { opacity: 0.6 }]}
+            />
+
+            {detectedLink ? (
+              <View style={styles.linkHint} accessible accessibilityLabel={`偵測到${jobSiteName(detectedLink)}職缺網址，會直接讀取這份職缺`}>
+                <Ionicons name="link" size={15} color="#FFFFFF" />
+                <T variant="small" color={onBrand.text} style={{ flex: 1 }}>偵測到 {jobSiteName(detectedLink)} 職缺網址，會直接讀取這份職缺的公司、薪資和內容</T>
+              </View>
+            ) : null}
+
+            <View style={styles.actions}>
+              <View style={{ flex: 1 }}>
+                <Button variant="white" icon={detectedLink ? 'link' : 'search'} label={detectedLink ? '讀取並檢查' : '開始檢查'} loading={busy}
+                  disabled={Boolean(setupReason)} onPress={startCheck} />
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel="拍照或選擇職缺截圖" onPress={pickImage} disabled={busy}
+                style={({ pressed }) => [styles.modeBtn, pressed && { opacity: 0.8 }]}>
+                <Ionicons name="camera" size={22} color="#FFFFFF" />
+              </Pressable>
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="拍照或選擇職缺截圖" onPress={pickImage} disabled={busy}
-              style={({ pressed }) => [styles.modeBtn, pressed && { opacity: 0.8 }]}>
-              <Ionicons name="camera" size={22} color="#FFFFFF" />
-            </Pressable>
+
+            {plan.pro ? (
+              <View style={styles.quota} accessible accessibilityLabel={quota.kind === 'count' ? `Pro 方案，本月剩餘 ${remaining} 次，每月最多 ${quota.limit} 次` : 'Pro 方案，本月額度讀取中'}>
+                <Ionicons name="sparkles" size={16} color="#FFFFFF" />
+                <T variant="caption" color={onBrand.muted}>{quota.kind === 'count' ? `Pro・本月剩 ${remaining}／${quota.limit} 次` : quota.kind === 'error' ? 'Pro・暫時讀不到本月次數' : 'Pro・讀取本月次數…'}</T>
+              </View>
+            ) : (
+              <Pressable accessibilityRole={paymentsEnabled ? 'button' : undefined} style={styles.quota} disabled={!paymentsEnabled} onPress={() => router.push('/plans')}
+                accessibilityLabel={quota.kind === 'count' ? `免費，這個月還可以檢查 ${remaining} 次，每月 ${quota.limit} 次` : '本月檢查次數'}>
+                {quota.kind === 'count' ? (
+                  <View style={styles.quotaTrack}><View style={[styles.quotaFill, { width: `${(remaining / quota.limit) * 100}%` }]} /></View>
+                ) : quota.kind === 'loading' ? <ActivityIndicator size="small" color="#FFFFFF" /> : null}
+                <T variant="caption" color={onBrand.muted}>
+                  {quota.kind === 'count'
+                    ? (remaining > 0 ? `免費・這個月還可以檢查 ${remaining} 次` : paymentsEnabled ? '這個月的免費次數用完了・看 Pro 方案' : '這個月的次數用完了，下個月 1 日恢復')
+                    : quota.kind === 'error' ? '暫時讀不到本月次數' : '讀取本月次數…'}
+                </T>
+              </Pressable>
+            )}
           </View>
 
-          {plan.pro ? (
-            <View style={styles.quota} accessible accessibilityLabel={quota.kind === 'count' ? `Pro 方案，本月剩餘 ${remaining} 次，每月最多 ${quota.limit} 次` : 'Pro 方案，本月額度讀取中'}>
-              <Ionicons name="sparkles" size={16} color="#FFFFFF" />
-              <T variant="caption" color={onBrand.muted}>{quota.kind === 'count' ? `Pro・本月剩 ${remaining}／${quota.limit} 次` : quota.kind === 'error' ? 'Pro・暫時讀不到本月次數' : 'Pro・讀取本月次數…'}</T>
+          <SetupBanner reason={setupReason} />
+
+          <View style={styles.tip}>
+            <View style={styles.tipIcon}><Ionicons name="bulb" size={20} color={colors.text} /></View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <T variant="captionStrong" color={colors.warning}>小提醒</T>
+              <T variant="caption" color={colors.textBody}>{tip}</T>
             </View>
-          ) : (
-            <Pressable accessibilityRole={paymentsEnabled ? 'button' : undefined} style={styles.quota} disabled={!paymentsEnabled} onPress={() => router.push('/plans')}
-              accessibilityLabel={quota.kind === 'count' ? `免費，這個月還可以檢查 ${remaining} 次，每月 ${quota.limit} 次` : '本月檢查次數'}>
-              {quota.kind === 'count' ? (
-                <View style={styles.quotaTrack}><View style={[styles.quotaFill, { width: `${(remaining / quota.limit) * 100}%` }]} /></View>
-              ) : quota.kind === 'loading' ? <ActivityIndicator size="small" color="#FFFFFF" /> : null}
-              <T variant="caption" color={onBrand.muted}>
-                {quota.kind === 'count'
-                  ? (remaining > 0 ? `免費・這個月還可以檢查 ${remaining} 次` : paymentsEnabled ? '這個月的免費次數用完了・看 Pro 方案' : '這個月的次數用完了，下個月 1 日恢復')
-                  : quota.kind === 'error' ? '暫時讀不到本月次數' : '讀取本月次數…'}
-              </T>
-            </Pressable>
-          )}
-        </View>
-
-        <SetupBanner reason={setupReason} />
-
-        <View style={styles.tip}>
-          <View style={styles.tipIcon}><Ionicons name="bulb" size={20} color={colors.text} /></View>
-          <View style={{ flex: 1, gap: 2 }}>
-            <T variant="captionStrong" color={colors.warning}>小提醒</T>
-            <T variant="caption" color={colors.textBody}>{tip}</T>
           </View>
-        </View>
-
-        <SectionTitle title="最近檢查的工作" action={recent && recent.length ? '全部' : undefined} onAction={() => router.push('/jobs')} />
-        {recentError ? (
-          <View style={styles.recentEmpty}>
-            <T variant="caption" muted style={{ textAlign: 'center' }}>最近紀錄暫時讀不到</T>
-            <Button compact variant="soft" icon="refresh" label="重新讀取" onPress={() => { void init(); }} />
-          </View>
-        ) : recent === null ? (
-          [0, 1].map(i => <View key={i} style={styles.skeleton} />)
-        ) : recent.length === 0 ? (
-          <View style={styles.recentEmpty}>
-            <IconCircle icon="document-text" coral />
-            <T variant="caption" muted style={{ textAlign: 'center' }}>還沒有檢查過的工作。貼上一份職缺，30 秒內就能看到報告。</T>
-          </View>
-        ) : (
-          <View style={{ gap: 10 }}>
-            {recent.map(job => {
-              const day = relativeDay(job.created_at, now);
-              return (
-                <Pressable key={job.id} accessibilityRole="button"
-                  accessibilityLabel={`查看體檢報告：${job.job_title || '未命名職缺'}，${job.display_company_name || '公司待確認'}`}
-                  onPress={() => router.push(`/report/${job.id}`)}
-                  style={({ pressed }) => [styles.jobRow, pressed && { opacity: 0.85 }]}>
-                  <IconCircle icon="briefcase" coral />
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <T variant="bodyStrong" numberOfLines={1}>{[job.job_title || '未命名職缺', job.display_company_name].filter(Boolean).join('・')}</T>
-                    <T variant="caption" muted numberOfLines={1}>{[day ? `${day}檢查` : null, job.salary_raw].filter(Boolean).join('・') || '薪資沒寫'}</T>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.placeholder} />
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
-        <View style={styles.privacy}>
-          <Ionicons name="shield-checkmark" size={15} color={colors.success} />
-          <T variant="small" muted style={{ flex: 1 }}>職缺內容只用來產生你的報告；{keepOriginal ? '已設定保留截圖原圖。' : '截圖原圖 24 小時內自動刪除。'}</T>
-        </View>
+        </Columns>
       </Screen>
 
       <JobTextReview
@@ -561,6 +568,8 @@ const styles = StyleSheet.create({
   pasteCard: { backgroundColor: colors.primary, borderRadius: radius.xxl, padding: 18, gap: 14, ...shadow.coral },
   input: { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: 14, fontSize: 15, lineHeight: 22, color: colors.text },
   textArea: { minHeight: 96, maxHeight: 220, paddingTop: 12, paddingBottom: 12 },
+  // 兩欄時貼上框是主角，高度和右邊的清單抓齊。
+  textAreaTall: { minHeight: 220, maxHeight: 360 },
   linkHint: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: onBrand.chip, borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 8 },
   sourceBox: { backgroundColor: colors.surface, borderRadius: radius.md, padding: space.md, gap: 4 },
   sourceHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },

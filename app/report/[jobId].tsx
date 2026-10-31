@@ -29,7 +29,7 @@ import { ensureTrackedJob } from '@/src/lib/jobTracking';
 import { deleteJob } from '@/src/lib/jobs';
 import { showMessage, confirmAction } from '@/src/lib/uiAlerts';
 import { colors, radius, space, tone as toneStyles, type Tone } from '@/src/theme/tokens';
-import { Button, Chip, Empty, FocusStatusBar, IconButton, IconCircle, Notice, Num, Screen, SectionTitle, Surface, T, type IconName } from '@/src/ui';
+import { Button, Chip, Empty, FocusStatusBar, IconButton, IconCircle, Notice, Num, Screen, SectionTitle, Surface, T, useLayout, type IconName } from '@/src/ui';
 import { DaysOffGrid, SalaryScaleView, ShiftBar } from '@/src/ui/viz';
 import { reviewPrompt } from '@/src/lib/reviewPrompt';
 
@@ -85,6 +85,7 @@ function goBack() {
 
 export default function ReportScreen() {
   const { jobId } = useLocalSearchParams<{ jobId: string }>();
+  const { compact } = useLayout();
   const [report, setReport] = useState<JobReport | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [nearExpanded, setNearExpanded] = useState(false);
@@ -634,7 +635,7 @@ export default function ReportScreen() {
             const bg = item.tone === 'neutral' || item.tone === 'info' ? colors.neutralSoft : t.bg;
             return (
               <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={`${item.title}：${item.value}`}
-                onPress={() => jumpTo(sectionFor[item.key])} style={({ pressed }) => [styles.tile, { backgroundColor: bg }, pressed && { opacity: 0.8 }]}>
+                onPress={() => jumpTo(sectionFor[item.key])} style={({ pressed }) => [styles.tile, !compact && styles.tileRegular, { backgroundColor: bg }, pressed && { opacity: 0.8 }]}>
                 <View style={styles.tileIcon}><Ionicons name={checkIcons[item.key]} size={18} color={item.tone === 'neutral' || item.tone === 'info' ? colors.textMuted : t.iconColor} /></View>
                 <T variant="captionStrong" color={colors.textBody}>{item.title}</T>
                 <T variant="subhead" color={item.tone === 'neutral' || item.tone === 'info' ? colors.text : t.fg} numberOfLines={3}>{item.value}</T>
@@ -704,6 +705,8 @@ const styles = StyleSheet.create({
   section: { gap: space.md },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   tile: { flexBasis: '47%', flexGrow: 1, borderRadius: radius.xl, padding: 14, gap: 8 },
+  // 閱讀欄夠寬時一列放三張，不用把兩張拉得太長。
+  tileRegular: { flexBasis: '30%' },
   tileIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   actionBar: { flexDirection: 'row', gap: space.md - 2, alignItems: 'center' },
   amountRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' },

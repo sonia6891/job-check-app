@@ -9,9 +9,11 @@ import { filterAndSortJobs, type JobSort } from '@/src/lib/jobFilters';
 import { attachTracking, isEnded, matchesView, relativeDay, viewCounts, type MyJobView, type TrackRow } from '@/src/lib/myJobs';
 import { showMessage } from '@/src/lib/uiAlerts';
 import { colors, radius, shadow, space, type Tone } from '@/src/theme/tokens';
-import { Button, Chip, Empty, FocusStatusBar, Num, Screen, Segmented, T } from '@/src/ui';
+import { Button, CardGrid, Chip, columnsFor, Empty, FocusStatusBar, Num, Screen, Segmented, T, useLayout } from '@/src/ui';
 
 type JobRow = JobCardData & { created_at: string | null };
+
+const CARD_GAP = 10;
 
 const statusStyle: Record<ProgressStatus, { tone: Tone }> = {
   saved: { tone: 'neutral' },
@@ -25,6 +27,8 @@ const statusStyle: Record<ProgressStatus, { tone: Tone }> = {
 };
 
 export default function JobsScreen() {
+  const { wideWidth } = useLayout();
+  const columns = columnsFor(wideWidth, 300, CARD_GAP);
   const [jobs, setJobs] = useState<JobRow[] | null>(null);
   const [tracks, setTracks] = useState<TrackRow[]>([]);
   const [view, setView] = useState<MyJobView>('all');
@@ -101,7 +105,7 @@ export default function JobsScreen() {
   ];
 
   return (
-    <Screen safeTop tabBar header={header}>
+    <Screen safeTop tabBar wide header={header}>
       <View style={styles.stats}>
         {stats.map(s => (
           <View key={s.label} style={styles.stat} accessible accessibilityLabel={`${s.label} ${s.value} 份`}>
@@ -150,14 +154,14 @@ export default function JobsScreen() {
           body={query.trim() ? '換個關鍵字，或清除搜尋。' : view === 'all' ? '回到「體檢」貼上第一份職缺。' : '在體檢報告下方按書籤或「加入求職追蹤」，就會出現在這裡。'}
           action={<Button compact variant="soft" label={query.trim() ? '清除搜尋' : '去體檢'} onPress={() => query.trim() ? setQuery('') : router.push('/')} />} />
       ) : (
-        <View style={{ gap: 10 }}>
+        <CardGrid columns={columns} gap={CARD_GAP}>
           {visible.map(job => {
             const status = (job.track?.status || 'saved') as ProgressStatus;
             const style = job.track ? statusStyle[status] ?? statusStyle.saved : null;
             const ended = isEnded(job.track);
             const day = relativeDay(job.created_at, new Date());
             return (
-              <View key={job.id} style={[styles.card, ended && styles.cardEnded]}>
+              <View key={job.id} style={[styles.card, columns > 1 && styles.cardFill, ended && styles.cardEnded]}>
                 <Pressable accessibilityRole="button"
                   accessibilityLabel={`查看體檢報告：${job.job_title || '未命名職缺'}，${job.display_company_name || '公司待確認'}，${job.track ? progressLabels[status] ?? '追蹤中' : '未追蹤'}`}
                   onPress={() => router.push(`/report/${job.id}`)}
@@ -185,7 +189,7 @@ export default function JobsScreen() {
               </View>
             );
           })}
-        </View>
+        </CardGrid>
       )}
     </Screen>
   );
@@ -200,6 +204,7 @@ const styles = StyleSheet.create({
   sortRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: space.sm },
   skeleton: { height: 120, borderRadius: 22, backgroundColor: colors.neutralSoft },
   card: { backgroundColor: colors.surface, borderRadius: 22, ...shadow.card },
+  cardFill: { flexGrow: 1 },
   cardEnded: { backgroundColor: colors.surfaceMuted, shadowOpacity: 0, elevation: 0 },
   cardMain: { padding: space.lg, gap: space.sm, borderRadius: 22 },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: space.sm },

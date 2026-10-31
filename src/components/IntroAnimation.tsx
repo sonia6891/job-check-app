@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Ellipse, G, Line, Path, Polygon, Polyline, Rect } from 'react-native-svg';
 import { colors } from '@/src/theme/tokens';
 import { SignInButtons, type SignInMethod } from '@/src/components/SignInButtons';
@@ -26,6 +26,9 @@ const OFFSET = { x: (VIEW.x + VIEW.size / 2 - 512) * UNIT, y: (VIEW.y + VIEW.siz
 const DURATION = 4800;
 // 淡出前的最後一格。
 const HOLD = 4400;
+// 登入按鈕離底部的距離，以最高的手機（6.9 吋）為準。
+const SIGN_IN_BOTTOM = 96;
+const TALLEST_PHONE = 956;
 
 const ink = colors.text;
 const coral = colors.primary;
@@ -44,6 +47,9 @@ type Props = {
 };
 
 export function IntroAnimation({ onDone, askSignIn }: Props) {
+  const { height } = useWindowDimensions();
+  // 貓固定在畫面正中央；高過最大手機的螢幕，按鈕也跟著往中間靠，不要和貓隔得老遠。
+  const signInBottom = SIGN_IN_BOTTOM + Math.max(0, (height - TALLEST_PHONE) / 2);
   const t = useRef(new Animated.Value(0)).current;
   const buttons = useRef(new Animated.Value(0)).current;
   const finished = useRef(false);
@@ -244,7 +250,7 @@ export function IntroAnimation({ onDone, askSignIn }: Props) {
         <Animated.Text style={[styles.tagline, { opacity: at([3400, 3800], [0, 1]), transform: [{ translateX: OFFSET.x }, { translateY: OFFSET.y }] }]}>找工作，先安心</Animated.Text>
       </Animated.View>
       {held ? (
-        <Animated.View style={[styles.signIn, { opacity: Animated.multiply(buttons, at([4450, DURATION], [1, 0])), transform: [{ translateY: buttons.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }]}>
+        <Animated.View style={[styles.signIn, { bottom: signInBottom, opacity: Animated.multiply(buttons, at([4450, DURATION], [1, 0])), transform: [{ translateY: buttons.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }]}>
           <SignInButtons busy={busy} onPick={(method, signIn) => void pick(method, signIn)} onGuest={leave} />
         </Animated.View>
       ) : null}
@@ -256,7 +262,7 @@ const styles = StyleSheet.create({
   overlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 100, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
   canvas: { width: SIZE, height: SIZE, overflow: 'visible' },
   // 選登入方式時貓和字往上挪 60，按鈕放在下面。
-  signIn: { position: 'absolute', left: 0, right: 0, bottom: 96, alignItems: 'center' },
+  signIn: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   // 放大鏡小畫布的左上角放在 viewBox 的 (VIEW.x - 160, VIEW.y - 160)，再用 translate 移到鏡片位置。
   scanner: { position: 'absolute', left: px(-160), top: px(-160), width: px(480), height: px(480) },
   // 字距也加在最後一個字後面，整行會往左偏半個字距；左邊補同樣寬度，再跟公文包一起平移 OFFSET.x，字才在同一條中線上。

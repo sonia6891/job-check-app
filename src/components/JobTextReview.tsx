@@ -2,9 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, space } from '@/src/theme/tokens';
-import { Button, Chip, T } from '@/src/ui';
+import { Button, Chip, T, useLayout } from '@/src/ui';
+import { DIALOG_WIDTH } from '@/src/ui/layout';
 import { parseSalaryText } from '@/src/lib/minimumWage';
 import { shiftSpans } from '@/src/lib/workHours';
+
+// 手機維持原本的百分比寫法；比最大的手機寬時（Duo、iPad）才用視窗高度算上限。
+// 百分比是對面板自己的內容高度算的，手機上面板會短一截。
+const PHONE_WIDTH = 440;
 
 type Props = {
   visible: boolean; mode: 'text' | 'ocr'; text: string; sourceUrl?: string | null; busy: boolean;
@@ -21,16 +26,17 @@ type Props = {
  */
 export function JobTextReview({ visible, mode, text, sourceUrl, busy, pageCount, onChangeText, onCancel, onConfirm, company, companyLoading, onChangeCompany }: Props) {
   const insets = useSafeAreaInsets();
+  const { compact, width, height } = useLayout();
   const length = text.trim().length;
   const hasSalary = Boolean(parseSalaryText(text));
   const hasHours = shiftSpans(text).length > 0;
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, !compact && styles.backdropCentered]}>
         <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="返回修改" onPress={busy ? undefined : onCancel} />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, space.lg) + space.md }]}>
-            <View style={styles.grabber} />
+          <View style={[styles.sheet, { maxHeight: width > PHONE_WIDTH ? height * 0.92 : '92%', paddingBottom: Math.max(insets.bottom, space.lg) + space.md }, !compact && styles.dialog]}>
+            {compact ? <View style={styles.grabber} /> : null}
             <ScrollView contentContainerStyle={{ gap: space.lg }} keyboardShouldPersistTaps="handled">
               <View style={{ gap: 4 }}>
                 <T variant="heading" accessibilityRole="header">{mode === 'ocr' ? '辨識好了，先核對一下' : '送出前，先看一下內容'}</T>
@@ -80,7 +86,10 @@ export function JobTextReview({ visible, mode, text, sourceUrl, busy, pageCount,
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(43,33,24,0.45)' },
-  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl, paddingHorizontal: 20, paddingTop: 10, maxHeight: '92%', gap: space.md },
+  backdropCentered: { justifyContent: 'center', alignItems: 'center' },
+  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl, paddingHorizontal: 20, paddingTop: 10, gap: space.md },
+  // 平板上改成置中的對話框，不是貼底、滿版的底部面板。
+  dialog: { width: DIALOG_WIDTH, borderRadius: radius.xxl, paddingTop: space.xl, paddingBottom: space.xl },
   grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: colors.lineStrong },
   source: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primarySoft, borderRadius: radius.sm, padding: space.md },
   editor: { minHeight: 140, maxHeight: 280, backgroundColor: colors.surfaceMuted, borderRadius: 18, padding: 14, fontSize: 15, lineHeight: 23, color: colors.text },

@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors } from '@/src/theme/colors';
+import { useLayout } from '@/src/ui/layout';
 
 export type CompareJob = {
   job_post_id: string;
@@ -63,6 +64,10 @@ const styles = StyleSheet.create({
   value: { flex: 1, color: colors.text, fontSize: 13, fontWeight: '700', lineHeight: 20 }
 });
 
+const TABLE_PADDING = 16;
+const CELL_WIDTH = 150;
+const CELL_GAP = 10;
+
 type CompareRow = { label: string; value: (job: CompareJob) => string; warn?: (job: CompareJob) => boolean };
 const compareRows: CompareRow[] = [
   { label: '公司', value: j => j.legal_company_name || j.company_display_name || '公司待確認', warn: j => j.company_match_status !== 'confirmed' },
@@ -75,11 +80,13 @@ const compareRows: CompareRow[] = [
 
 /**
  * 並排比較表（Figma「比較職缺」）：每一列一個條件，各職缺的值左右並排。
- * 只並列原文與公開資料，不選「哪個最好」；超過 2 份時可以左右滑。
+ * 只並列原文與公開資料，不選「哪個最好」；放不下時（手機上超過 2 份）可以左右滑，放得下就平均分寬度。
  */
 export function CompareTable({ jobs, onOpen }: { jobs: CompareJob[]; onOpen: (jobPostId: string) => void }) {
-  const wide = jobs.length > 2;
-  const cell = wide ? { width: 150 } : { flex: 1 };
+  const { readingWidth } = useLayout();
+  const inner = readingWidth - TABLE_PADDING * 2;
+  const wide = jobs.length > 2 && jobs.length * (CELL_WIDTH + CELL_GAP) - CELL_GAP > inner;
+  const cell = wide ? { width: CELL_WIDTH } : { flex: 1 };
   const body = (
     <View>
       <View style={table.row}>
@@ -110,8 +117,8 @@ export function CompareTable({ jobs, onOpen }: { jobs: CompareJob[]; onOpen: (jo
   );
 }
 const table = StyleSheet.create({
-  card: { backgroundColor: colors.surface, borderRadius: 26, padding: 16, shadowColor: '#8A5A2B', shadowOpacity: 0.07, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  row: { flexDirection: 'row', gap: 10 },
+  card: { backgroundColor: colors.surface, borderRadius: 26, padding: TABLE_PADDING, shadowColor: '#8A5A2B', shadowOpacity: 0.07, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  row: { flexDirection: 'row', gap: CELL_GAP },
   head: { backgroundColor: colors.primarySoft, borderRadius: 18, padding: 12, gap: 4 },
   title: { color: colors.text, fontSize: 15, fontWeight: '800', lineHeight: 21 },
   link: { color: colors.primary, fontSize: 12, fontWeight: '700' },

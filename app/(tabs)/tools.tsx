@@ -2,7 +2,7 @@ import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, onBrand, radius, shadow, space } from '@/src/theme/tokens';
-import { FocusStatusBar, IconCircle, Num, Screen, SectionTitle, T, type IconName } from '@/src/ui';
+import { Columns, FocusStatusBar, IconCircle, Num, Screen, SectionTitle, T, type IconName } from '@/src/ui';
 import { showMessage } from '@/src/lib/uiAlerts';
 
 const hotlines: Array<{ number: string; title: string; detail: string; bg: string; fg: string }> = [
@@ -47,56 +47,60 @@ export default function ToolsScreen() {
   );
 
   return (
-    <Screen safeTop tabBar header={header}>
-      <Pressable accessibilityRole="button" accessibilityLabel="基本工資檢查：輸入薪資，馬上知道有沒有低於法定標準"
-        onPress={() => router.push('/tools/wage-check')} style={({ pressed }) => [styles.feature, pressed && { opacity: 0.9 }]}>
-        <View style={styles.featureIcon}><Ionicons name="calculator" size={24} color={colors.primary} /></View>
-        <View style={{ flex: 1, gap: 2 }}>
-          <T variant="heading" color={onBrand.text}>基本工資檢查</T>
-          <T variant="caption" color={onBrand.muted}>輸入薪資，馬上知道有沒有低於法定標準</T>
-        </View>
-        <Ionicons name="arrow-forward" size={22} color="#FFFFFF" />
-      </Pressable>
-
-      <View style={styles.listCard}>
-        <Row first icon="git-compare" title="比較職缺" detail="收藏兩份以上就能並排看" onPress={() => router.push('/compare?source=saved')} />
-        <Row icon="checkmark-done" title="求職進度" detail="投遞、面試、Offer 一次看" onPress={() => router.push('/progress')} />
-      </View>
-
-      <SectionTitle title="遇到問題可以打" />
-      <View style={styles.hotlines}>
-        {hotlines.map(h => (
-          <Pressable key={h.number} accessibilityRole="button" accessibilityLabel={`撥打 ${h.number} ${h.title}`} onPress={() => dial(h.number)}
-            style={({ pressed }) => [styles.hotline, { backgroundColor: h.bg }, pressed && { opacity: 0.85 }]}>
-            <View style={styles.hotlineTop}>
-              <Num size={30} color={h.fg}>{h.number}</Num>
-              <View style={styles.phone}><Ionicons name="call" size={16} color={h.fg} /></View>
-            </View>
-            <T variant="bodyStrong">{h.title}</T>
-            <T variant="caption" color={colors.textBody}>{h.detail}</T>
-          </Pressable>
-        ))}
-      </View>
-      <Pressable accessibilityRole="link" accessibilityLabel="查看專線與政府資料的原始來源" onPress={() => router.push('/sources')}
-        style={({ pressed }) => [styles.sourceLink, pressed && { opacity: 0.7 }]} hitSlop={6}>
-        <T variant="small" muted style={{ flex: 1 }}>165 由內政部警政署、1955 由勞動部提供；本 App 由民間開發，不代表任何政府機關。</T>
-        <T variant="captionStrong" color={colors.primary}>來源</T>
-        <Ionicons name="chevron-forward" size={14} color={colors.primary} />
-      </Pressable>
-
-      <SectionTitle title="求職小知識" />
-      <View style={styles.listCard}>
-        {knowledge.map((k, i) => (
-          <View key={k.title} style={[styles.row, i > 0 && styles.divider]}>
-            <IconCircle icon={k.icon} size={36} tone="caution" />
-            <View style={{ flex: 1, gap: 1 }}>
-              <T variant="bodyStrong">{k.title}</T>
-              <T variant="caption" muted>{k.detail}</T>
-            </View>
+    <Screen safeTop tabBar wide header={header}>
+      <Columns aside={(
+        <>
+          <SectionTitle title="求職小知識" />
+          <View style={styles.listCard}>
+            {knowledge.map((k, i) => (
+              <View key={k.title} style={[styles.row, i > 0 && styles.divider]}>
+                <IconCircle icon={k.icon} size={36} tone="caution" />
+                <View style={{ flex: 1, gap: 1 }}>
+                  <T variant="bodyStrong">{k.title}</T>
+                  <T variant="caption" muted>{k.detail}</T>
+                </View>
+              </View>
+            ))}
           </View>
-        ))}
-      </View>
-      <T variant="small" muted style={{ paddingHorizontal: space.xs }}>以上是一般原則，實際情況以勞動部公告與勞動契約為準。基本工資檢查、求職進度和求助專線都免費。</T>
+          <T variant="small" muted style={{ paddingHorizontal: space.xs }}>以上是一般原則，實際情況以勞動部公告與勞動契約為準。基本工資檢查、求職進度和求助專線都免費。</T>
+        </>
+      )}>
+        <Pressable accessibilityRole="button" accessibilityLabel="基本工資檢查：輸入薪資，馬上知道有沒有低於法定標準"
+          onPress={() => router.push('/tools/wage-check')} style={({ pressed }) => [styles.feature, pressed && { opacity: 0.9 }]}>
+          <View style={styles.featureIcon}><Ionicons name="calculator" size={24} color={colors.primary} /></View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <T variant="heading" color={onBrand.text}>基本工資檢查</T>
+            <T variant="caption" color={onBrand.muted}>輸入薪資，馬上知道有沒有低於法定標準</T>
+          </View>
+          <Ionicons name="arrow-forward" size={22} color="#FFFFFF" />
+        </Pressable>
+
+        <View style={styles.listCard}>
+          <Row first icon="git-compare" title="比較職缺" detail="收藏兩份以上就能並排看" onPress={() => router.push('/compare?source=saved')} />
+          <Row icon="checkmark-done" title="求職進度" detail="投遞、面試、Offer 一次看" onPress={() => router.push('/progress')} />
+        </View>
+
+        <SectionTitle title="遇到問題可以打" />
+        <View style={styles.hotlines}>
+          {hotlines.map(h => (
+            <Pressable key={h.number} accessibilityRole="button" accessibilityLabel={`撥打 ${h.number} ${h.title}`} onPress={() => dial(h.number)}
+              style={({ pressed }) => [styles.hotline, { backgroundColor: h.bg }, pressed && { opacity: 0.85 }]}>
+              <View style={styles.hotlineTop}>
+                <Num size={30} color={h.fg}>{h.number}</Num>
+                <View style={styles.phone}><Ionicons name="call" size={16} color={h.fg} /></View>
+              </View>
+              <T variant="bodyStrong">{h.title}</T>
+              <T variant="caption" color={colors.textBody}>{h.detail}</T>
+            </Pressable>
+          ))}
+        </View>
+        <Pressable accessibilityRole="link" accessibilityLabel="查看專線與政府資料的原始來源" onPress={() => router.push('/sources')}
+          style={({ pressed }) => [styles.sourceLink, pressed && { opacity: 0.7 }]} hitSlop={6}>
+          <T variant="small" muted style={{ flex: 1 }}>165 由內政部警政署、1955 由勞動部提供；本 App 由民間開發，不代表任何政府機關。</T>
+          <T variant="captionStrong" color={colors.primary}>來源</T>
+          <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+        </Pressable>
+      </Columns>
     </Screen>
   );
 }

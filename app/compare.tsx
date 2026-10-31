@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '@/src/lib/api';
 import { supabase } from '@/src/lib/supabase';
 import { colors, radius, space } from '@/src/theme/tokens';
-import { Button, Empty, Notice, Screen, SectionTitle, T } from '@/src/ui';
+import { Button, CardGrid, columnsFor, Empty, Notice, Screen, SectionTitle, T, useLayout } from '@/src/ui';
 import { showMessage } from '@/src/lib/uiAlerts';
 import { CompareTable, type CompareJob } from '@/src/components/JobCompareResultCard';
 import { chooseSavedForComparison } from '@/src/lib/compareSelection';
@@ -13,6 +13,7 @@ import { validateCompareResults } from '@/src/lib/compareValidation';
 import { paymentsEnabled, usePlan } from '@/src/lib/plan';
 
 export default function CompareScreen() {
+  const { readingWidth } = useLayout();
   const { source } = useLocalSearchParams<{ source?: string }>();
   const [ready, setReady] = useState(false);
   const [jobs, setJobs] = useState<any[]>([]);
@@ -146,7 +147,7 @@ export default function CompareScreen() {
     <Screen>
       <T variant="caption" muted style={{ paddingHorizontal: space.xs }}>{source === 'saved' ? '從收藏裡挑 2–5 份，並排看條件。' : '挑 2–5 份檢查過的工作，並排看條件。'}</T>
 
-      <View style={{ gap: 10 }}>
+      <CardGrid columns={columnsFor(readingWidth, 280, 10, 2)} gap={10}>
         {jobs.map((j) => {
           const on = selected.includes(j.id);
           const full = !on && selected.length >= 5;
@@ -157,7 +158,7 @@ export default function CompareScreen() {
               disabled={full || busy}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: on, disabled: full || busy }}
-              style={[styles.job, on && styles.jobSelected, full && { opacity: 0.5 }]}
+              style={[styles.job, styles.jobFill, on && styles.jobSelected, full && { opacity: 0.5 }]}
             >
               <View style={[styles.check, on && styles.checkOn]}>{on ? <Ionicons name="checkmark" size={16} color="#FFFFFF" /> : null}</View>
               <View style={{ flex: 1, gap: 1 }}>
@@ -167,7 +168,7 @@ export default function CompareScreen() {
             </Pressable>
           );
         })}
-      </View>
+      </CardGrid>
 
       <Button icon="git-compare" label={`開始比較（${selected.length}/5）`} loading={busy}
         disabled={selected.length < 2} onPress={() => { void compare(); }} />
@@ -192,6 +193,7 @@ export default function CompareScreen() {
 const styles = StyleSheet.create({
   skeleton: { height: 64, borderRadius: radius.xl, backgroundColor: colors.neutralSoft },
   job: { backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.line, borderRadius: 18, padding: 14, flexDirection: 'row', gap: 12, alignItems: 'center' },
+  jobFill: { flexGrow: 1 },
   jobSelected: { borderColor: colors.primary, borderWidth: 2, backgroundColor: colors.primarySoft },
   check: { width: 24, height: 24, borderRadius: 8, borderWidth: 2, borderColor: colors.lineStrong, alignItems: 'center', justifyContent: 'center' },
   checkOn: { backgroundColor: colors.primary, borderColor: colors.primary }
