@@ -81,7 +81,12 @@ pages() { # 姿勢名稱
   done
 }
 
-pages closed
+launch /
+sleep 25
+snap closed-home
+# fold、rotate 要透過 serve-sim 的背景服務。
+npx --yes serve-sim@0.1.48 --detach "$udid" >> "$out/serve-sim.txt" 2>&1
+sleep 8
 # 在 App 開著的時候打開手機，看畫面有沒有順利接到內螢幕。
 sim fold 180 -d "$udid"
 sleep 15
